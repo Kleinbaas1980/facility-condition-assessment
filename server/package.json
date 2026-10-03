@@ -1,0 +1,46 @@
+{
+  "name": "@fca/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --import tsx src/index.ts",
+    "build": "tsc -p tsconfig.json && node src/scripts/copy-assets.mjs",
+    "start": "node dist/src/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "db:migrate": "node --import tsx src/scripts/migrate.ts",
+    "db:check": "node --import tsx src/scripts/check-database.ts",
+    "test:integration": "node --import tsx --test tests/integration/*.test.ts",
+    "db:migrate:production": "node dist/src/scripts/migrate.js",
+    "admin:promote": "node --import tsx src/scripts/promote-admin.ts"
+  },
+  "dependencies": {
+    "@azure/storage-blob": "^12.29.0",
+    "@vercel/blob": "^2.8.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "file-type": "^21.0.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "nodemailer": "^10.0.13",
+    "pg": "^8.16.3",
+    "pino": "^9.9.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.19.0",
+    "@types/nodemailer": "^7.0.1",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.3"
+  }
+}

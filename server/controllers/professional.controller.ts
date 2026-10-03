@@ -1,0 +1,6 @@
+import type {Request,Response} from 'express';
+import {z} from 'zod';
+import {pool,transaction} from '../configs/database.js';
+const entry=z.object({name:z.string().trim().min(1).max(160),email:z.string().trim().email().max(254).transform(v=>v.toLowerCase()),profession:z.enum(['Architect','Plumber','Electrician','Structural Engineer','Fire Engineer','Mechanical Engineer','Civil Engineer']),active:z.union([z.boolean(),z.literal(0),z.literal(1)]).default(true)});
+export async function list(_req:Request,res:Response){res.json((await pool.query('SELECT email,name,profession,active FROM assessor_assignments ORDER BY name')).rows)}
+export async function save(req:Request,res:Response){const {assessors}=z.object({assessors:z.array(entry).min(1).max(200)}).parse(req.body);await transaction(async db=>{for(const a of assessors){await db.query('INSERT INTO assessor_assignments(email,name,profession,active,updated_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(email) DO UPDATE SET name=excluded.name,profession=excluded.profession,active=excluded.active,updated_by=excluded.updated_by,updated_at=now()',[a.email,a.name,a.profession,!!a.active,req.auth!.userId]);if(!a.active)await db.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id IN (SELECT id FROM users WHERE email=$1) AND revoked_at IS NULL',[a.email]);}});res.json({ok:true})}

@@ -1,0 +1,5 @@
+import type { RequestHandler } from 'express';
+import { pool } from '../configs/database.js';
+import { digest } from '../src/utils/crypto.js';
+// PostgreSQL-backed limits work across multiple Express instances.
+export function rateLimit(scope:string,limit:number,seconds:number):RequestHandler{return async(req,res,next)=>{try{const identity=req.auth?.userId||req.ip||'unknown';const key=digest(scope+':'+identity);const result=await pool.query('INSERT INTO rate_limits(key,window_start,hits) VALUES ($1,now(),1) ON CONFLICT(key) DO UPDATE SET hits=CASE WHEN rate_limits.window_start < now()-($2 * interval \'1 second\') THEN 1 ELSE rate_limits.hits+1 END,window_start=CASE WHEN rate_limits.window_start < now()-($2 * interval \'1 second\') THEN now() ELSE rate_limits.window_start END RETURNING hits',[key,seconds]);if(result.rows[0].hits>limit){res.set('Retry-After',String(seconds));res.status(429).json({error:'Too many requests. Please try again later.',code:'RATE_LIMITED'});return}next()}catch(error){next(error)}}}

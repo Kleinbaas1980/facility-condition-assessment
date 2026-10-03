@@ -1,0 +1,6 @@
+-- Neon creates the database and role in its console. DO NOT run CREATE DATABASE
+-- through the runtime pool or inside a transaction. For self-hosted PostgreSQL:
+-- CREATE ROLE fca_app LOGIN PASSWORD 'choose-a-strong-unique-password';
+-- CREATE DATABASE fca OWNER fca_app;
+-- Connect to the new database, then run npm run db:migrate or execute schema.sql.
+-- Never check real credentials into source control.

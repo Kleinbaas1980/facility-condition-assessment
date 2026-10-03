@@ -1,0 +1,5 @@
+import type { ErrorRequestHandler } from 'express';
+import { MulterError } from 'multer';
+import { HttpError } from '../src/utils/errors.js';
+import { logger } from '../configs/logger.js';
+export const errorHandler:ErrorRequestHandler=(error,req,res,_next)=>{if(res.headersSent){res.destroy();return}if(error instanceof HttpError){res.status(error.status).json({error:error.message,code:error.code,...error.details,requestId:req.requestId});return}if(error instanceof MulterError){res.status(400).json({error:'Invalid upload or file is too large.',code:'UPLOAD_INVALID'});return}if(error?.type==='entity.too.large'){res.status(413).json({error:'Request is too large.'});return}if(error instanceof SyntaxError&&'body' in error){res.status(400).json({error:'Invalid JSON.'});return}if(error?.code==='23505'){res.status(409).json({error:'A record with these details already exists.',code:'CONFLICT'});return}logger.error({requestId:req.requestId,error:error?.message},'Request failed');res.status(500).json({error:'The request could not be completed.',code:'INTERNAL_ERROR',requestId:req.requestId})};

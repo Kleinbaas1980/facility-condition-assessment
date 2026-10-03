@@ -1,0 +1,19 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file: server/.env
+    expose: ["4000"]
+    restart: unless-stopped
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+      args:
+        API_PROXY_TARGET: http://server:4000
+    ports: ["3000:3000"]
+    depends_on: [server]
+    restart: unless-stopped
+# Neon and your private blob store are external services; no SQLite/local data service.
+# Put client behind your HTTPS reverse proxy. Set CLIENT_ORIGIN to that HTTPS origin.
