@@ -1,3 +1,22 @@
-import { http } from './http';
-import type { Project,ProjectInput } from '@/types/project';
-export const projectsApi={list:async()=>(await http.get<Omit<Project,'payload'>[]>('/projects')).data,get:async(id:string)=>(await http.get<Project>(`/projects/${id}`)).data,create:async(input:ProjectInput)=>(await http.post<Project>('/projects',input)).data,save:async(id:string,input:ProjectInput&{version:number})=>(await http.patch<Project>(`/projects/${id}`,input)).data,archive:async(id:string)=>{await http.delete(`/projects/${id}`)},restore:async(assetNumber:string,projectName?:string)=>(await http.post<Project>('/projects/restore',{assetNumber,projectName})).data};
+import { http } from "./http";
+import type { Project, ProjectInput } from "@/types/project";
+export const projectsApi = {
+  list: async () =>
+    (await http.get<Omit<Project, "payload">[]>("/projects")).data,
+  get: async (id: string) => (await http.get<Project>(`/projects/${id}`)).data,
+
+  create: async (input: ProjectInput) =>
+    (await http.post<Project>("/projects", input)).data,
+  save: async (id: string, input: ProjectInput & { version: number }) =>
+    (await http.patch<Project>(`/projects/${id}`, input)).data,
+  archive: async (id: string) => {
+    await http.delete(`/projects/${id}`);
+  },
+  restore: async (assetNumber: string, projectName?: string) =>
+    (
+      await http.post<Project>("/projects/restore", {
+        assetNumber,
+        projectName,
+      })
+    ).data,
+};

@@ -5,56 +5,947 @@ import { allocation, itemAmount } from "@/lib/costing";
 import { priorities } from "@/lib/priorities";
 import { createReportPdf } from "@/lib/report-pdf";
 import { downloadQsBoqCsv } from "@/lib/boq-csv";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-type Photo={id:string;name:string};
-type Capture={area:string;section?:string;element:string;component:string;type?:string;discipline?:string;exists:string;ratings:number[];extent?:number|null;remedialQuantity?:number|null;extentUnit?:string;unitRate?:number|null;remedialCost?:number|null;priority?:string;measuredScope?:string;comment?:string;workType?:string;maintenanceWork?:string;photos?:Photo[]};
-type Pricing={pg:number;fees:number;contingency:number;vat:number};
-type Project={companyName?:string;companyAddress?:string;clientAddress?:string;id:string;name:string;client:string;assetNumber:string;discipline?:string;sitePlanName?:string;facilityLogoName?:string;companyLogoName?:string;assessorSignatureName?:string;assessorName?:string;assessorRole?:string;assessorRegistration?:string;payload:{areas:{name:string;code:string}[];captures:Capture[];pricing?:Pricing}};
-const labels=["Very good · C1","Good · C2","Fair · C3","Poor · C4","Very poor · C5"];
-const colors=["#19866b","#83ae43","#e4aa2c","#df772e","#c94a47"];
-const money=(value:number)=>new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR"}).format(value);
-const goodRatings=(r:Capture)=>r.ratings?.length===5&&r.ratings.every(v=>Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<=100)&&Math.abs(r.ratings.reduce((s,v)=>s+Number(v),0)-100)<.01;
-const dominant=(r:Capture)=>goodRatings(r)?r.ratings.indexOf(Math.max(...r.ratings)):-1;
-const percent=(v:number)=>Number.isFinite(v)&&v>=0&&v<=100?v:0;
-export default function SummaryReport({project,onBack,onBranding,onPricingChange,onSave}:{project:Project;onBack:()=>void;onBranding:()=>void;onPricingChange:(p:Pricing)=>void;onSave:()=>Promise<void>}){
- const [allocationFilter,setAllocationFilter]=useState(""),[areaFilter,setAreaFilter]=useState(""),[elementFilter,setElementFilter]=useState(""),[professionFilter,setProfessionFilter]=useState(""),[pdfBusy,setPdfBusy]=useState(false),[pdfMessage,setPdfMessage]=useState("");
- const [emailOpen,setEmailOpen]=useState(false),[recipient,setRecipient]=useState("");
- async function prepareEmail(e:React.FormEvent){e.preventDefault();if(!recipient.trim())return;setPdfBusy(true);setPdfMessage("");try{const file=await createReportPdf(project);await reportsApi.email(project.id,recipient.trim(),file);setEmailOpen(false);setPdfMessage("The PDF report has been emailed.")}catch(e){setPdfMessage(e instanceof Error?e.message:"Could not email the PDF. Please try again.")}finally{setPdfBusy(false)}}
- async function pdfAction(share:boolean){setPdfBusy(true);setPdfMessage("");try{const file=await createReportPdf(project);if(share&&navigator.canShare?.({files:[file]})&&navigator.share){await navigator.share({files:[file],title:`FCA report: ${project.name}`})}else{const url=URL.createObjectURL(file);const a=document.createElement("a");a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60_000);if(share)setPdfMessage("PDF downloaded. Attach the file in your email app to send it.")}}catch(e){if(e instanceof DOMException&&e.name==="AbortError")return;setPdfMessage("Could not prepare the PDF. Please try again.")}finally{setPdfBusy(false)}}
- const boqRef=useRef<HTMLElement>(null);
- const captures=project.payload.captures;
- const present=captures.filter(r=>r.exists?.trim().toLowerCase()!=="no");
- const rated=present.filter(goodRatings);
- const poor=rated.filter(r=>Number(r.ratings[3])>0),veryPoor=rated.filter(r=>Number(r.ratings[4])>0);
- const priced=captures.filter(r=>itemAmount(r)!==null);
- const direct=priced.reduce((sum,r)=>sum+(itemAmount(r)||0),0);
- const settings=project.payload.pricing||{pg:0,fees:0,contingency:0,vat:0};
- const pg=direct*percent(settings.pg)/100,fees=direct*percent(settings.fees)/100,contingency=direct*percent(settings.contingency)/100;
- const subtotal=direct+pg+fees+contingency,vat=subtotal*percent(settings.vat)/100,total=subtotal+vat;
- const areaCode=new Map(project.payload.areas.map(a=>[a.name,a.code]));
- const blockOf=(r:Capture)=>allocation(areaCode.get(r.area));
- const allocations=[...new Set(priced.map(blockOf))].map(name=>({name,items:priced.filter(r=>blockOf(r)===name),cost:priced.filter(r=>blockOf(r)===name).reduce((sum,r)=>sum+(itemAmount(r)||0),0)})).sort((a,b)=>b.cost-a.cost);
- const elements=[...new Set(priced.map(r=>r.element))].map(name=>({name,items:priced.filter(r=>r.element===name),cost:priced.filter(r=>r.element===name).reduce((sum,r)=>sum+(itemAmount(r)||0),0)})).sort((a,b)=>b.cost-a.cost);
- const areas=[...new Set([...project.payload.areas.map(a=>a.name),...captures.map(r=>r.area)])].map(name=>({name,items:captures.filter(r=>r.area===name),pricedItems:priced.filter(r=>r.area===name),cost:priced.filter(r=>r.area===name).reduce((sum,r)=>sum+(itemAmount(r)||0),0)})).sort((a,b)=>b.cost-a.cost);
- const priority=priorities.map(p=>({...p,items:captures.filter(r=>r.priority?.trim().toUpperCase()===p.code)}));
- const conditionCounts=labels.map((_,i)=>rated.filter(r=>dominant(r)===i).length);
- const filtered=captures.filter(r=>(!allocationFilter||blockOf(r)===allocationFilter)&&(!areaFilter||r.area===areaFilter)&&(!elementFilter||r.element===elementFilter)&&(!professionFilter||(r.discipline||project.discipline||"Unassigned")===professionFilter));
- const filteredTotal=filtered.reduce((sum,r)=>sum+(itemAmount(r)||0),0);
- const draft=!captures.length||rated.length<present.length||priced.length<captures.length||captures.some(r=>!r.priority);
- function jumpToBoq(block="",element=""){setAllocationFilter(block);setAreaFilter("");setElementFilter(element);setProfessionFilter("");requestAnimationFrame(()=>boqRef.current?.scrollIntoView({behavior:"smooth",block:"start"}));}
- return <div className="report"><div className="report-actions actions"><button className="btn outline" onClick={onBranding}>Edit logos &amp; assessor</button><button className="btn ghost" onClick={onBack}>← Back to assessment</button><button className="btn outline" onClick={()=>void onSave()}>Save report settings</button><button className="btn" onClick={()=>{setAllocationFilter("");setAreaFilter("");setElementFilter("");setProfessionFilter("");setTimeout(()=>window.print(),50)}}>Print / save PDF</button><button className="btn outline" disabled={pdfBusy} onClick={()=>void pdfAction(false)}>{pdfBusy?"Sending…":"Download PDF"}</button><button className="btn outline" disabled={pdfBusy} onClick={()=>setEmailOpen(true)}>Email PDF</button><button className="btn outline" onClick={()=>downloadQsBoqCsv(project)}>Download QS BOQ CSV</button>{pdfMessage&&<span className="muted" role="status">{pdfMessage}</span>}</div>
- <Dialog open={emailOpen} onOpenChange={setEmailOpen}><DialogContent><DialogHeader><DialogTitle>Email assessment PDF</DialogTitle><DialogDescription>Enter the recipient. The report will be sent as a PDF attachment to this address.</DialogDescription></DialogHeader><form className="stack" onSubmit={e=>void prepareEmail(e)}><label>Recipient email address<input type="email" required autoFocus autoComplete="email" value={recipient} onChange={e=>setRecipient(e.target.value)} placeholder="name@example.com" /></label><DialogFooter><button className="btn" type="submit" disabled={pdfBusy}>{pdfBusy?"Sending…":"Send PDF report"}</button></DialogFooter></form></DialogContent></Dialog>
- <section className="report-cover template-cover" aria-label="Report cover page">{project.companyLogoName&&<img className="cover-brand-icon" src={`/api/projects/${project.id}/company-logo?v=${encodeURIComponent(project.companyLogoName)}`} alt="Assessment company logo" />}<img className="cover-art" src="/images/fca-cover-waves.svg" alt="" aria-hidden="true" /><div className="cover-photo-collage" aria-label="Facility assessment photographs"><img className="cover-circle circle-left" src="/images/fca-assessor.png" alt="Facility assessor" /><img className="cover-circle circle-centre" src="/images/fca-assessment-team.png" alt="Assessment team at work" /><img className="cover-circle circle-right" src="/images/fca-assessment-team.png" alt="Facility inspection" /></div><div className="template-cover-content"><div className="report-cover-title"><div className="eyebrow">Facility condition</div><h1>Assessment<br /><span>report</span></h1></div><div className="cover-bottom"><div className="cover-year">{new Date().getFullYear()}</div><p className="cover-project-name">{project.name}</p><div className="cover-subtitle">Summary report and bill of quantities</div><span className={`report-status ${draft?"draft":"complete"}`}>{draft?"Draft · review incomplete entries":"Assessment summary"}</span><div className="cover-parties"><div className="cover-party"><div className="party-label">Prepared by</div><strong>{project.companyName||project.assessorName||"Assessor not entered"}</strong>{project.assessorName&&project.companyName&&<span>{project.assessorName}</span>}{project.companyAddress&&<address>{project.companyAddress}</address>}</div><div className="cover-party cover-client"><div className="party-label">Prepared for</div><strong>{project.client||"Client not entered"}</strong>{project.clientAddress&&<address>{project.clientAddress}</address>}</div></div><dl className="report-cover-details">{[["Asset number",project.assetNumber],["Profession",project.discipline],["Professional role",project.assessorRole],["Registration",project.assessorRegistration],["Report issued",new Date().toLocaleDateString("en-ZA")]].filter(([,value])=>value).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></div></div></section>
- <div className="report-themed-body"><header className="report-heading"><div className="report-logos">{project.companyLogoName&&<img className="report-logo" src={`/api/projects/${project.id}/company-logo?v=${encodeURIComponent(project.companyLogoName)}`} alt="Assessment company logo" />}{project.facilityLogoName&&<img className="report-logo report-client-logo" src={`/api/projects/${project.id}/facility-logo?v=${encodeURIComponent(project.facilityLogoName)}`} alt="Client logo" />}</div><div><div className="eyebrow">Facility condition assessment</div><h1>Assessment dashboard & BOQ</h1><p>{project.name}{project.assetNumber?` · ${project.assetNumber}`:""}</p><p>{project.client||"Client not specified"}{project.discipline?` · ${project.discipline}`:""}</p></div><div className={`report-status ${draft?"draft":"complete"}`}>{draft?"Draft · review incomplete entries":"Assessment summary"}</div></header>
- <section className="report-kpis"><div className="report-kpi price"><span>Indicative total {settings.vat>0?"incl. entered VAT":"before VAT"}</span><strong>{money(total)}</strong></div><div className="report-kpi"><span>Direct remedial works</span><strong>{money(direct)}</strong></div><div className="report-kpi"><span>Captured components</span><strong>{captures.length}</strong></div><div className="report-kpi very-poor"><span>P1 urgent items</span><strong>{priority[0].items.length}</strong></div></section>
- <p className="report-note">{poor.length} items contain C4 Poor and {veryPoor.length} contain C5 Very Poor condition. An item may appear in both counts. {rated.length} of {present.length} present items have complete C1–C5 ratings.</p>
- <div className="report-charts"><section className="card"><h2>Condition rating of captured items</h2><p className="muted">Each rated item appears once at its largest C1–C5 percentage. {present.length-conditionCounts.reduce((a,b)=>a+b,0)} unrated or incomplete items are excluded.</p>{labels.map((label,i)=><div className="cost-bar-row" key={label}><div><span>{label}</span><strong>{conditionCounts[i]} item{conditionCounts[i]===1?"":"s"}</strong></div><div className="cost-track"><span style={{width:`${rated.length?100*conditionCounts[i]/rated.length:0}%`,background:colors[i]}} /></div></div>)}</section><section className="card"><h2>Priority and response window</h2><p className="muted">Set priority on each captured component during assessment.</p>{priority.map(({code,window,items,color})=><div className="cost-bar-row" key={code}><div><span>{code} · {window}</span><strong>{items.length} item{items.length===1?"":"s"}</strong></div><div className="cost-track"><span style={{width:`${captures.length?100*items.length/captures.length:0}%`,background:color}} /></div></div>)}<p className="report-note">{captures.length-priority.reduce((sum,p)=>sum+p.items.length,0)} captured items have no priority yet. Response windows are planning categories, subject to professional review.</p></section></div>
- <div className="report-formula">Indicative total = direct works + P&amp;G + professional fees + contingency + entered VAT.</div>
- <div className="report-charts"><section className="card"><h2>Direct works by block / allocation</h2>{allocations.length?allocations.map(a=><button className="cost-bar-row clickable" key={a.name} onClick={()=>jumpToBoq(a.name)}><div><span>{a.name}</span><strong>{money(a.cost)}</strong></div><div className="cost-track"><span style={{width:`${direct?100*a.cost/direct:0}%`,background:"#087dbe"}} /></div></button>):<div className="empty">No priced items yet.</div>}</section><section className="card"><h2>Element cost drivers</h2>{elements.length?elements.slice(0,10).map((a,i)=><button className="cost-bar-row clickable" key={a.name} onClick={()=>jumpToBoq("",a.name)}><div><span>{a.name}</span><strong>{money(a.cost)}</strong></div><div className="cost-track"><span style={{width:`${direct?100*a.cost/direct:0}%`,background:["#087dbe","#d9363e","#42bbdc","#efb340","#2e956f"][i%5]}} /></div></button>):<div className="empty">No priced items yet.</div>}<p className="report-note">Select a bar to view its BOQ lines below.</p></section></div>
- <section className="card report-section"><h2>Pricing build-up</h2><div className="pricing-inputs">{([['pg','P&G'],['fees','Professional fees'],['contingency','Contingency'],['vat','VAT']] as const).map(([key,label])=><label key={key}>{label} (%)<input type="number" min="0" max="100" step="0.1" value={settings[key]} onChange={e=>onPricingChange({...settings,[key]:e.target.value===""?0:percent(Number(e.target.value))})} /></label>)}</div><div className="table-scroll"><table><tbody><tr><td>Direct remedial works</td><td>{money(direct)}</td></tr><tr><td>P&G ({settings.pg||0}%)</td><td>{money(pg)}</td></tr><tr><td>Professional fees ({settings.fees||0}%)</td><td>{money(fees)}</td></tr><tr><td>Contingency ({settings.contingency||0}%)</td><td>{money(contingency)}</td></tr><tr><td>VAT on subtotal ({settings.vat||0}%)</td><td>{money(vat)}</td></tr><tr className="total-row"><th>Indicative total</th><th>{money(total)}</th></tr></tbody></table></div><p className="muted">Each allowance is calculated on direct works. VAT is calculated on direct works plus allowances. Enter project approved percentages and save.</p></section>
- <section className="card report-section"><h2>Direct works by functional area</h2><div className="table-scroll"><table><thead><tr><th>Functional area</th><th>Captured items</th><th>Priced items</th><th>Amount</th></tr></thead><tbody>{areas.map(a=><tr key={a.name}><td>{a.name}</td><td>{a.items.length}</td><td>{a.pricedItems.length}</td><td>{money(a.cost)}</td></tr>)}<tr className="total-row"><th>Total direct works</th><th>{captures.length}</th><th>{priced.length}</th><th>{money(direct)}</th></tr></tbody></table></div></section>
- <section className="card report-section" ref={boqRef}><div className="toolbar"><div><h2>Full bill of quantities</h2><p className="muted">Every captured component appears. Complete blank quantities and rates in QS pricing. Totals include priced lines only.</p></div><div className="actions report-filters"><label>Block / allocation<select value={allocationFilter} onChange={e=>setAllocationFilter(e.target.value)}><option value="">All</option>{[...new Set(captures.map(blockOf))].map(name=><option key={name}>{name}</option>)}</select></label><label>Functional area<select value={areaFilter} onChange={e=>setAreaFilter(e.target.value)}><option value="">All</option>{[...new Set(captures.map(r=>r.area))].map(name=><option key={name}>{name}</option>)}</select></label><label>Profession<select value={professionFilter} onChange={e=>setProfessionFilter(e.target.value)}><option value="">All</option>{[...new Set(captures.map(r=>r.discipline||project.discipline||"Unassigned"))].map(name=><option key={name}>{name}</option>)}</select></label><label>Element<select value={elementFilter} onChange={e=>setElementFilter(e.target.value)}><option value="">All</option>{[...new Set(captures.map(r=>r.element))].filter(Boolean).sort().map(name=><option key={name}>{name}</option>)}</select></label></div></div><div className="table-scroll"><table className="boq-table"><colgroup><col style={{width:38}} /><col /><col /><col /><col /><col className="boq-extent-col" /><col /><col /><col /><col className="boq-rating-col" /><col className="boq-priority-col" /><col /><col /></colgroup><thead><tr><th>#</th><th>Block / functional area</th><th>Element / component</th><th>Component type / profession</th><th>Measured remedial scope</th><th className="boq-extent">Extent</th><th>Remedial qty / unit</th><th>Rate</th><th>Amount</th><th>Rating</th><th>Priority</th><th>Work type</th><th>Reference</th></tr></thead><tbody>{filtered.map((r,i)=>{const rating=dominant(r);return <tr key={i}><td>{i+1}</td><td>{blockOf(r)}<small>{r.area}</small></td><td>{r.element}<small>{r.component}</small></td><td>{r.type||"—"}<small>{r.discipline||project.discipline||"—"}</small></td><td>{r.measuredScope||r.comment||"Awaiting measured scope"}</td><td className="boq-extent">{r.extent??"—"}</td><td>{r.remedialQuantity!=null?`${r.remedialQuantity} ${r.extentUnit||""}`.trim():"For QS review"}</td><td>{r.unitRate!=null?money(Number(r.unitRate)):"—"}</td><td>{itemAmount(r)==null?"For QS review":money(itemAmount(r)!)}</td><td>{rating>=0?`C${rating+1} · ${labels[rating].split(" · ")[0]}`:"Unrated"}</td><td className="boq-priority">{r.priority||"No priority"}</td><td>{r.workType||"—"}<small>{r.workType!=="Compliance"&&r.maintenanceWork?r.maintenanceWork:""}</small></td><td>{r.photos?.length?<a href={`/api/projects/${project.id}/photos/${r.photos[0].id}`} target="_blank" rel="noreferrer">Photo ({r.photos.length})</a>:project.sitePlanName?<a href={`/api/projects/${project.id}/site-plan`} target="_blank" rel="noreferrer">Site plan</a>:"—"}</td></tr>})}<tr className="total-row"><th colSpan={8}>Filtered direct works · {filtered.length} captured · {filtered.filter(r=>itemAmount(r)!==null).length} priced</th><th>{money(filteredTotal)}</th><th colSpan={4}></th></tr></tbody></table></div></section>
- <section className="card report-section assessor-signoff"><h2>Assessor sign-off</h2>{project.assessorSignatureName&&<img src={`/api/projects/${project.id}/assessor-signature?v=${encodeURIComponent(project.assessorSignatureName)}`} alt="Assessor signature" />}{project.assessorName?<p><strong>{project.assessorName}</strong><br />{project.assessorRole||"Assessor"}{project.assessorRegistration&&<> · Registration {project.assessorRegistration}</>}</p>:<p className="muted">Assessor name not entered.</p>}{!project.assessorSignatureName&&<p className="muted">Signature not uploaded.</p>}</section>
- <section className="report-disclaimer"><h2>Pricing disclaimer</h2><p>Costs are indicative assessment estimates, not a final quotation or measured bill of quantities. Confirm scope, quantities, specifications, site access, contractor rates, fees, contingency and VAT before procurement. Blank cost fields are excluded. Where a unit rate and remedial quantity are entered, amount equals remedial quantity × rate; otherwise the manually entered remedial cost is used. A zero total does not mean no remedial work is required.</p></section></div></div>;
+type Photo = { id: string; name: string };
+
+type Capture = {
+  area: string;
+  section?: string;
+  element: string;
+  component: string;
+  type?: string;
+  discipline?: string;
+  exists: string;
+  ratings: number[];
+  extent?: number | null;
+  remedialQuantity?: number | null;
+  extentUnit?: string;
+  unitRate?: number | null;
+  remedialCost?: number | null;
+  priority?: string;
+  measuredScope?: string;
+  comment?: string;
+  workType?: string;
+  maintenanceWork?: string;
+  photos?: Photo[];
+};
+type Pricing = { pg: number; fees: number; contingency: number; vat: number };
+type Project = {
+  companyName?: string;
+  companyAddress?: string;
+  clientAddress?: string;
+  id: string;
+  name: string;
+  client: string;
+  assetNumber: string;
+  discipline?: string;
+  sitePlanName?: string;
+  facilityLogoName?: string;
+  companyLogoName?: string;
+  assessorSignatureName?: string;
+  assessorName?: string;
+  assessorRole?: string;
+  assessorRegistration?: string;
+  payload: {
+    areas: { name: string; code: string }[];
+    captures: Capture[];
+    pricing?: Pricing;
+  };
+};
+const labels = [
+  "Very good · C1",
+  "Good · C2",
+  "Fair · C3",
+  "Poor · C4",
+  "Very poor · C5",
+];
+const colors = ["#19866b", "#83ae43", "#e4aa2c", "#df772e", "#c94a47"];
+const money = (value: number) =>
+  new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(
+    value,
+  );
+const goodRatings = (r: Capture) =>
+  r.ratings?.length === 5 &&
+  r.ratings.every(
+    (v) => Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 100,
+  ) &&
+  Math.abs(r.ratings.reduce((s, v) => s + Number(v), 0) - 100) < 0.01;
+const dominant = (r: Capture) =>
+  goodRatings(r) ? r.ratings.indexOf(Math.max(...r.ratings)) : -1;
+const percent = (v: number) =>
+  Number.isFinite(v) && v >= 0 && v <= 100 ? v : 0;
+export default function SummaryReport({
+  project,
+  onBack,
+  onBranding,
+  onPricingChange,
+  onSave,
+}: {
+  project: Project;
+  onBack: () => void;
+  onBranding: () => void;
+  onPricingChange: (p: Pricing) => void;
+  onSave: () => Promise<void>;
+}) {
+  const [allocationFilter, setAllocationFilter] = useState(""),
+    [areaFilter, setAreaFilter] = useState(""),
+    [elementFilter, setElementFilter] = useState(""),
+    [professionFilter, setProfessionFilter] = useState(""),
+    [pdfBusy, setPdfBusy] = useState(false),
+    [pdfMessage, setPdfMessage] = useState("");
+  const [emailOpen, setEmailOpen] = useState(false),
+    [recipient, setRecipient] = useState("");
+  async function prepareEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!recipient.trim()) return;
+    setPdfBusy(true);
+    setPdfMessage("");
+    try {
+      const file = await createReportPdf(project);
+      await reportsApi.email(project.id, recipient.trim(), file);
+      setEmailOpen(false);
+      setPdfMessage("The PDF report has been emailed.");
+    } catch (e) {
+      setPdfMessage(
+        e instanceof Error
+          ? e.message
+          : "Could not email the PDF. Please try again.",
+      );
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+  async function pdfAction(share: boolean) {
+    setPdfBusy(true);
+    setPdfMessage("");
+    try {
+      const file = await createReportPdf(project);
+      if (share && navigator.canShare?.({ files: [file] }) && navigator.share) {
+        await navigator.share({
+          files: [file],
+          title: `FCA report: ${project.name}`,
+        });
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        if (share)
+          setPdfMessage(
+            "PDF downloaded. Attach the file in your email app to send it.",
+          );
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setPdfMessage("Could not prepare the PDF. Please try again.");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+  const boqRef = useRef<HTMLElement>(null);
+  const captures = project.payload.captures;
+  const present = captures.filter(
+    (r) => r.exists?.trim().toLowerCase() !== "no",
+  );
+  const rated = present.filter(goodRatings);
+  const poor = rated.filter((r) => Number(r.ratings[3]) > 0),
+    veryPoor = rated.filter((r) => Number(r.ratings[4]) > 0);
+  const priced = captures.filter((r) => itemAmount(r) !== null);
+  const direct = priced.reduce((sum, r) => sum + (itemAmount(r) || 0), 0);
+  const settings = project.payload.pricing || {
+    pg: 0,
+    fees: 0,
+    contingency: 0,
+    vat: 0,
+  };
+  const pg = (direct * percent(settings.pg)) / 100,
+    fees = (direct * percent(settings.fees)) / 100,
+    contingency = (direct * percent(settings.contingency)) / 100;
+  const subtotal = direct + pg + fees + contingency,
+    vat = (subtotal * percent(settings.vat)) / 100,
+    total = subtotal + vat;
+  const areaCode = new Map(project.payload.areas.map((a) => [a.name, a.code]));
+  const blockOf = (r: Capture) => allocation(areaCode.get(r.area));
+  const allocations = [...new Set(priced.map(blockOf))]
+    .map((name) => ({
+      name,
+      items: priced.filter((r) => blockOf(r) === name),
+      cost: priced
+        .filter((r) => blockOf(r) === name)
+        .reduce((sum, r) => sum + (itemAmount(r) || 0), 0),
+    }))
+    .sort((a, b) => b.cost - a.cost);
+  const elements = [...new Set(priced.map((r) => r.element))]
+    .map((name) => ({
+      name,
+      items: priced.filter((r) => r.element === name),
+      cost: priced
+        .filter((r) => r.element === name)
+        .reduce((sum, r) => sum + (itemAmount(r) || 0), 0),
+    }))
+    .sort((a, b) => b.cost - a.cost);
+  const areas = [
+    ...new Set([
+      ...project.payload.areas.map((a) => a.name),
+      ...captures.map((r) => r.area),
+    ]),
+  ]
+    .map((name) => ({
+      name,
+      items: captures.filter((r) => r.area === name),
+      pricedItems: priced.filter((r) => r.area === name),
+      cost: priced
+        .filter((r) => r.area === name)
+        .reduce((sum, r) => sum + (itemAmount(r) || 0), 0),
+    }))
+    .sort((a, b) => b.cost - a.cost);
+  const priority = priorities.map((p) => ({
+    ...p,
+    items: captures.filter((r) => r.priority?.trim().toUpperCase() === p.code),
+  }));
+  const conditionCounts = labels.map(
+    (_, i) => rated.filter((r) => dominant(r) === i).length,
+  );
+  const filtered = captures.filter(
+    (r) =>
+      (!allocationFilter || blockOf(r) === allocationFilter) &&
+      (!areaFilter || r.area === areaFilter) &&
+      (!elementFilter || r.element === elementFilter) &&
+      (!professionFilter ||
+        (r.discipline || project.discipline || "Unassigned") ===
+          professionFilter),
+  );
+  const filteredTotal = filtered.reduce(
+    (sum, r) => sum + (itemAmount(r) || 0),
+    0,
+  );
+  const draft =
+    !captures.length ||
+    rated.length < present.length ||
+    priced.length < captures.length ||
+    captures.some((r) => !r.priority);
+  function jumpToBoq(block = "", element = "") {
+    setAllocationFilter(block);
+    setAreaFilter("");
+    setElementFilter(element);
+    setProfessionFilter("");
+    requestAnimationFrame(() =>
+      boqRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  }
+  return (
+    <div className="report">
+      <div className="report-actions actions">
+        <button className="btn outline" onClick={onBranding}>
+          Edit logos &amp; assessor
+        </button>
+        <button className="btn ghost" onClick={onBack}>
+          ← Back to assessment
+        </button>
+        <button className="btn outline" onClick={() => void onSave()}>
+          Save report settings
+        </button>
+        <button
+          className="btn"
+          onClick={() => {
+            setAllocationFilter("");
+            setAreaFilter("");
+            setElementFilter("");
+            setProfessionFilter("");
+            setTimeout(() => window.print(), 50);
+          }}
+        >
+          Print / save PDF
+        </button>
+        <button
+          className="btn outline"
+          disabled={pdfBusy}
+          onClick={() => void pdfAction(false)}
+        >
+          {pdfBusy ? "Sending…" : "Download PDF"}
+        </button>
+        <button
+          className="btn outline"
+          disabled={pdfBusy}
+          onClick={() => setEmailOpen(true)}
+        >
+          Email PDF
+        </button>
+        <button
+          className="btn outline"
+          onClick={() => downloadQsBoqCsv(project)}
+        >
+          Download QS BOQ CSV
+        </button>
+        {pdfMessage && (
+          <span className="muted" role="status">
+            {pdfMessage}
+          </span>
+        )}
+      </div>
+      <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Email assessment PDF</DialogTitle>
+            <DialogDescription>
+              Enter the recipient. The report will be sent as a PDF attachment
+              to this address.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="stack" onSubmit={(e) => void prepareEmail(e)}>
+            <label>
+              Recipient email address
+              <input
+                type="email"
+                required
+                autoFocus
+                autoComplete="email"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                placeholder="name@example.com"
+              />
+            </label>
+            <DialogFooter>
+              <button className="btn" type="submit" disabled={pdfBusy}>
+                {pdfBusy ? "Sending…" : "Send PDF report"}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <section
+        className="report-cover template-cover"
+        aria-label="Report cover page"
+      >
+        {project.companyLogoName && (
+          <img
+            className="cover-brand-icon"
+            src={`/api/projects/${project.id}/company-logo?v=${encodeURIComponent(project.companyLogoName)}`}
+            alt="Assessment company logo"
+          />
+        )}
+        <img
+          className="cover-art"
+          src="/images/fca-cover-waves.svg"
+          alt=""
+          aria-hidden="true"
+        />
+        <div
+          className="cover-photo-collage"
+          aria-label="Facility assessment photographs"
+        >
+          <img
+            className="cover-circle circle-left"
+            src="/images/fca-assessor.png"
+            alt="Facility assessor"
+          />
+          <img
+            className="cover-circle circle-centre"
+            src="/images/fca-assessment-team.png"
+            alt="Assessment team at work"
+          />
+          <img
+            className="cover-circle circle-right"
+            src="/images/fca-assessment-team.png"
+            alt="Facility inspection"
+          />
+        </div>
+        <div className="template-cover-content">
+          <div className="report-cover-title">
+            <div className="eyebrow">Facility condition</div>
+            <h1>
+              Assessment
+              <br />
+              <span>report</span>
+            </h1>
+          </div>
+          <div className="cover-bottom">
+            <div className="cover-year">{new Date().getFullYear()}</div>
+            <p className="cover-project-name">{project.name}</p>
+            <div className="cover-subtitle">
+              Summary report and bill of quantities
+            </div>
+            <span className={`report-status ${draft ? "draft" : "complete"}`}>
+              {draft
+                ? "Draft · review incomplete entries"
+                : "Assessment summary"}
+            </span>
+            <div className="cover-parties">
+              <div className="cover-party">
+                <div className="party-label">Prepared by</div>
+                <strong>
+                  {project.companyName ||
+                    project.assessorName ||
+                    "Assessor not entered"}
+                </strong>
+                {project.assessorName && project.companyName && (
+                  <span>{project.assessorName}</span>
+                )}
+                {project.companyAddress && (
+                  <address>{project.companyAddress}</address>
+                )}
+              </div>
+              <div className="cover-party cover-client">
+                <div className="party-label">Prepared for</div>
+                <strong>{project.client || "Client not entered"}</strong>
+                {project.clientAddress && (
+                  <address>{project.clientAddress}</address>
+                )}
+              </div>
+            </div>
+            <dl className="report-cover-details">
+              {[
+                ["Asset number", project.assetNumber],
+                ["Profession", project.discipline],
+                ["Professional role", project.assessorRole],
+                ["Registration", project.assessorRegistration],
+                ["Report issued", new Date().toLocaleDateString("en-ZA")],
+              ]
+                .filter(([, value]) => value)
+                .map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+            </dl>
+          </div>
+        </div>
+      </section>
+      <div className="report-themed-body">
+        <header className="report-heading">
+          <div className="report-logos">
+            {project.companyLogoName && (
+              <img
+                className="report-logo"
+                src={`/api/projects/${project.id}/company-logo?v=${encodeURIComponent(project.companyLogoName)}`}
+                alt="Assessment company logo"
+              />
+            )}
+            {project.facilityLogoName && (
+              <img
+                className="report-logo report-client-logo"
+                src={`/api/projects/${project.id}/facility-logo?v=${encodeURIComponent(project.facilityLogoName)}`}
+                alt="Client logo"
+              />
+            )}
+          </div>
+          <div>
+            <div className="eyebrow">Facility condition assessment</div>
+            <h1>Assessment dashboard & BOQ</h1>
+            <p>
+              {project.name}
+              {project.assetNumber ? ` · ${project.assetNumber}` : ""}
+            </p>
+            <p>
+              {project.client || "Client not specified"}
+              {project.discipline ? ` · ${project.discipline}` : ""}
+            </p>
+          </div>
+          <div className={`report-status ${draft ? "draft" : "complete"}`}>
+            {draft ? "Draft · review incomplete entries" : "Assessment summary"}
+          </div>
+        </header>
+        <section className="report-kpis">
+          <div className="report-kpi price">
+            <span>
+              Indicative total{" "}
+              {settings.vat > 0 ? "incl. entered VAT" : "before VAT"}
+            </span>
+            <strong>{money(total)}</strong>
+          </div>
+          <div className="report-kpi">
+            <span>Direct remedial works</span>
+            <strong>{money(direct)}</strong>
+          </div>
+          <div className="report-kpi">
+            <span>Captured components</span>
+            <strong>{captures.length}</strong>
+          </div>
+          <div className="report-kpi very-poor">
+            <span>P1 urgent items</span>
+            <strong>{priority[0].items.length}</strong>
+          </div>
+        </section>
+        <p className="report-note">
+          {poor.length} items contain C4 Poor and {veryPoor.length} contain C5
+          Very Poor condition. An item may appear in both counts. {rated.length}{" "}
+          of {present.length} present items have complete C1–C5 ratings.
+        </p>
+        <div className="report-charts">
+          <section className="card">
+            <h2>Condition rating of captured items</h2>
+            <p className="muted">
+              Each rated item appears once at its largest C1–C5 percentage.{" "}
+              {present.length - conditionCounts.reduce((a, b) => a + b, 0)}{" "}
+              unrated or incomplete items are excluded.
+            </p>
+            {labels.map((label, i) => (
+              <div className="cost-bar-row" key={label}>
+                <div>
+                  <span>{label}</span>
+                  <strong>
+                    {conditionCounts[i]} item
+                    {conditionCounts[i] === 1 ? "" : "s"}
+                  </strong>
+                </div>
+                <div className="cost-track">
+                  <span
+                    style={{
+                      width: `${rated.length ? (100 * conditionCounts[i]) / rated.length : 0}%`,
+                      background: colors[i],
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </section>
+          <section className="card">
+            <h2>Priority and response window</h2>
+            <p className="muted">
+              Set priority on each captured component during assessment.
+            </p>
+            {priority.map(({ code, window, items, color }) => (
+              <div className="cost-bar-row" key={code}>
+                <div>
+                  <span>
+                    {code} · {window}
+                  </span>
+                  <strong>
+                    {items.length} item{items.length === 1 ? "" : "s"}
+                  </strong>
+                </div>
+                <div className="cost-track">
+                  <span
+                    style={{
+                      width: `${captures.length ? (100 * items.length) / captures.length : 0}%`,
+                      background: color,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+            <p className="report-note">
+              {captures.length -
+                priority.reduce((sum, p) => sum + p.items.length, 0)}{" "}
+              captured items have no priority yet. Response windows are planning
+              categories, subject to professional review.
+            </p>
+          </section>
+        </div>
+        <div className="report-formula">
+          Indicative total = direct works + P&amp;G + professional fees +
+          contingency + entered VAT.
+        </div>
+        <div className="report-charts">
+          <section className="card">
+            <h2>Direct works by block / allocation</h2>
+            {allocations.length ? (
+              allocations.map((a) => (
+                <button
+                  className="cost-bar-row clickable"
+                  key={a.name}
+                  onClick={() => jumpToBoq(a.name)}
+                >
+                  <div>
+                    <span>{a.name}</span>
+                    <strong>{money(a.cost)}</strong>
+                  </div>
+                  <div className="cost-track">
+                    <span
+                      style={{
+                        width: `${direct ? (100 * a.cost) / direct : 0}%`,
+                        background: "#087dbe",
+                      }}
+                    />
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="empty">No priced items yet.</div>
+            )}
+          </section>
+          <section className="card">
+            <h2>Element cost drivers</h2>
+            {elements.length ? (
+              elements.slice(0, 10).map((a, i) => (
+                <button
+                  className="cost-bar-row clickable"
+                  key={a.name}
+                  onClick={() => jumpToBoq("", a.name)}
+                >
+                  <div>
+                    <span>{a.name}</span>
+                    <strong>{money(a.cost)}</strong>
+                  </div>
+                  <div className="cost-track">
+                    <span
+                      style={{
+                        width: `${direct ? (100 * a.cost) / direct : 0}%`,
+                        background: [
+                          "#087dbe",
+                          "#d9363e",
+                          "#42bbdc",
+                          "#efb340",
+                          "#2e956f",
+                        ][i % 5],
+                      }}
+                    />
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="empty">No priced items yet.</div>
+            )}
+            <p className="report-note">
+              Select a bar to view its BOQ lines below.
+            </p>
+          </section>
+        </div>
+        <section className="card report-section">
+          <h2>Pricing build-up</h2>
+          <div className="pricing-inputs">
+            {(
+              [
+                ["pg", "P&G"],
+                ["fees", "Professional fees"],
+                ["contingency", "Contingency"],
+                ["vat", "VAT"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key}>
+                {label} (%)
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={settings[key]}
+                  onChange={(e) =>
+                    onPricingChange({
+                      ...settings,
+                      [key]:
+                        e.target.value === ""
+                          ? 0
+                          : percent(Number(e.target.value)),
+                    })
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          <div className="table-scroll">
+            <table>
+              <tbody>
+                <tr>
+                  <td>Direct remedial works</td>
+                  <td>{money(direct)}</td>
+                </tr>
+                <tr>
+                  <td>P&G ({settings.pg || 0}%)</td>
+                  <td>{money(pg)}</td>
+                </tr>
+                <tr>
+                  <td>Professional fees ({settings.fees || 0}%)</td>
+                  <td>{money(fees)}</td>
+                </tr>
+                <tr>
+                  <td>Contingency ({settings.contingency || 0}%)</td>
+                  <td>{money(contingency)}</td>
+                </tr>
+                <tr>
+                  <td>VAT on subtotal ({settings.vat || 0}%)</td>
+                  <td>{money(vat)}</td>
+                </tr>
+                <tr className="total-row">
+                  <th>Indicative total</th>
+                  <th>{money(total)}</th>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="muted">
+            Each allowance is calculated on direct works. VAT is calculated on
+            direct works plus allowances. Enter project approved percentages and
+            save.
+          </p>
+        </section>
+        <section className="card report-section">
+          <h2>Direct works by functional area</h2>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Functional area</th>
+                  <th>Captured items</th>
+                  <th>Priced items</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {areas.map((a) => (
+                  <tr key={a.name}>
+                    <td>{a.name}</td>
+                    <td>{a.items.length}</td>
+                    <td>{a.pricedItems.length}</td>
+                    <td>{money(a.cost)}</td>
+                  </tr>
+                ))}
+                <tr className="total-row">
+                  <th>Total direct works</th>
+                  <th>{captures.length}</th>
+                  <th>{priced.length}</th>
+                  <th>{money(direct)}</th>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section className="card report-section" ref={boqRef}>
+          <div className="toolbar">
+            <div>
+              <h2>Full bill of quantities</h2>
+              <p className="muted">
+                Every captured component appears. Complete blank quantities and
+                rates in QS pricing. Totals include priced lines only.
+              </p>
+            </div>
+            <div className="actions report-filters">
+              <label>
+                Block / allocation
+                <select
+                  value={allocationFilter}
+                  onChange={(e) => setAllocationFilter(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {[...new Set(captures.map(blockOf))].map((name) => (
+                    <option key={name}>{name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Functional area
+                <select
+                  value={areaFilter}
+                  onChange={(e) => setAreaFilter(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {[...new Set(captures.map((r) => r.area))].map((name) => (
+                    <option key={name}>{name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Profession
+                <select
+                  value={professionFilter}
+                  onChange={(e) => setProfessionFilter(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {[
+                    ...new Set(
+                      captures.map(
+                        (r) =>
+                          r.discipline || project.discipline || "Unassigned",
+                      ),
+                    ),
+                  ].map((name) => (
+                    <option key={name}>{name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Element
+                <select
+                  value={elementFilter}
+                  onChange={(e) => setElementFilter(e.target.value)}
+                >
+                  <option value="">All</option>
+                  {[...new Set(captures.map((r) => r.element))]
+                    .filter(Boolean)
+                    .sort()
+                    .map((name) => (
+                      <option key={name}>{name}</option>
+                    ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div className="table-scroll">
+            <table className="boq-table">
+              <colgroup>
+                <col style={{ width: 38 }} />
+                <col />
+                <col />
+                <col />
+                <col />
+                <col className="boq-extent-col" />
+                <col />
+                <col />
+                <col />
+                <col className="boq-rating-col" />
+                <col className="boq-priority-col" />
+                <col />
+                <col />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Block / functional area</th>
+                  <th>Element / component</th>
+                  <th>Component type / profession</th>
+                  <th>Measured remedial scope</th>
+                  <th className="boq-extent">Extent</th>
+                  <th>Remedial qty / unit</th>
+                  <th>Rate</th>
+                  <th>Amount</th>
+                  <th>Rating</th>
+                  <th>Priority</th>
+                  <th>Work type</th>
+                  <th>Reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r, i) => {
+                  const rating = dominant(r);
+                  return (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td>
+                        {blockOf(r)}
+                        <small>{r.area}</small>
+                      </td>
+                      <td>
+                        {r.element}
+                        <small>{r.component}</small>
+                      </td>
+                      <td>
+                        {r.type || "—"}
+                        <small>
+                          {r.discipline || project.discipline || "—"}
+                        </small>
+                      </td>
+                      <td>
+                        {r.measuredScope ||
+                          r.comment ||
+                          "Awaiting measured scope"}
+                      </td>
+                      <td className="boq-extent">{r.extent ?? "—"}</td>
+                      <td>
+                        {r.remedialQuantity != null
+                          ? `${r.remedialQuantity} ${r.extentUnit || ""}`.trim()
+                          : "For QS review"}
+                      </td>
+                      <td>
+                        {r.unitRate != null ? money(Number(r.unitRate)) : "—"}
+                      </td>
+                      <td>
+                        {itemAmount(r) == null
+                          ? "For QS review"
+                          : money(itemAmount(r)!)}
+                      </td>
+                      <td>
+                        {rating >= 0
+                          ? `C${rating + 1} · ${labels[rating].split(" · ")[0]}`
+                          : "Unrated"}
+                      </td>
+                      <td className="boq-priority">
+                        {r.priority || "No priority"}
+                      </td>
+                      <td>
+                        {r.workType || "—"}
+                        <small>
+                          {r.workType !== "Compliance" && r.maintenanceWork
+                            ? r.maintenanceWork
+                            : ""}
+                        </small>
+                      </td>
+                      <td>
+                        {r.photos?.length ? (
+                          <a
+                            href={`/api/projects/${project.id}/photos/${r.photos[0].id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Photo ({r.photos.length})
+                          </a>
+                        ) : project.sitePlanName ? (
+                          <a
+                            href={`/api/projects/${project.id}/site-plan`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Site plan
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr className="total-row">
+                  <th colSpan={8}>
+                    Filtered direct works · {filtered.length} captured ·{" "}
+                    {filtered.filter((r) => itemAmount(r) !== null).length}{" "}
+                    priced
+                  </th>
+                  <th>{money(filteredTotal)}</th>
+                  <th colSpan={4}></th>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section className="card report-section assessor-signoff">
+          <h2>Assessor sign-off</h2>
+          {project.assessorSignatureName && (
+            <img
+              src={`/api/projects/${project.id}/assessor-signature?v=${encodeURIComponent(project.assessorSignatureName)}`}
+              alt="Assessor signature"
+            />
+          )}
+          {project.assessorName ? (
+            <p>
+              <strong>{project.assessorName}</strong>
+              <br />
+              {project.assessorRole || "Assessor"}
+              {project.assessorRegistration && (
+                <> · Registration {project.assessorRegistration}</>
+              )}
+            </p>
+          ) : (
+            <p className="muted">Assessor name not entered.</p>
+          )}
+          {!project.assessorSignatureName && (
+            <p className="muted">Signature not uploaded.</p>
+          )}
+        </section>
+        <section className="report-disclaimer">
+          <h2>Pricing disclaimer</h2>
+          <p>
+            Costs are indicative assessment estimates, not a final quotation or
+            measured bill of quantities. Confirm scope, quantities,
+            specifications, site access, contractor rates, fees, contingency and
+            VAT before procurement. Blank cost fields are excluded. Where a unit
+            rate and remedial quantity are entered, amount equals remedial
+            quantity × rate; otherwise the manually entered remedial cost is
+            used. A zero total does not mean no remedial work is required.
+          </p>
+        </section>
+      </div>
+    </div>
+  );
 }

@@ -1,27 +1,74 @@
-import { Router } from 'express';
-import { z } from 'zod';
-import { HttpError } from '../src/utils/errors.js';
-import * as controller from '../controllers/auth.controller.js';
-import { requireAuth } from '../middleware/auth.js';
-import { csrfToken } from '../middleware/csrf.js';
-import { rateLimit } from '../middleware/rate-limit.js';
-import { validate } from '../middleware/validate.js';
-import { registerSchema,loginSchema,emailSchema,tokenSchema,resetSchema,changePasswordSchema,profileSchema } from '../src/validation/auth.js';
-export const authRoutes=Router();
-authRoutes.get('/csrf',csrfToken);
-authRoutes.post('/register',rateLimit('register',5,900),validate(registerSchema),controller.register);
-authRoutes.post('/login',rateLimit('login',15,900),validate(loginSchema),controller.login);
-authRoutes.post('/refresh',rateLimit('refresh',60,60),controller.refresh);
-authRoutes.post('/forgot-password',rateLimit('forgot',5,900),validate(emailSchema),controller.forgot);
-authRoutes.post('/resend-verification',rateLimit('verify-resend',5,900),validate(emailSchema),controller.resend);
-authRoutes.post('/verify-email',rateLimit('verify',20,900),validate(tokenSchema),controller.verifyEmail);
-authRoutes.post('/reset-password',rateLimit('reset',10,900),validate(resetSchema),controller.reset);
-authRoutes.use(requireAuth,rateLimit('auth-user',120,60));
-authRoutes.get('/me',controller.me);
-authRoutes.patch('/me',validate(profileSchema),controller.profile);
-authRoutes.post('/logout',controller.logout);
-authRoutes.post('/logout-all',controller.logoutAll);
-authRoutes.patch('/password',validate(changePasswordSchema),controller.changePassword);
-authRoutes.get('/sessions',controller.sessions);
-authRoutes.param('sessionId',(_req,_res,next,value)=>{if(!z.string().uuid().safeParse(value).success)return next(new HttpError(400,'Invalid session ID.'));next()});
-authRoutes.delete('/sessions/:sessionId',controller.revokeSession);
+import { Router } from "express";
+import { z } from "zod";
+import { HttpError } from "../src/utils/errors.js";
+import * as controller from "../controllers/auth.controller.js";
+import { requireAuth } from "../middleware/auth.js";
+import { csrfToken } from "../middleware/csrf.js";
+import { rateLimit } from "../middleware/rate-limit.js";
+import { validate } from "../middleware/validate.js";
+import {
+  registerSchema,
+  loginSchema,
+  emailSchema,
+  tokenSchema,
+  resetSchema,
+  changePasswordSchema,
+  profileSchema,
+} from "../src/validation/auth.js";
+
+export const authRoutes = Router();
+authRoutes.get("/csrf", csrfToken);
+authRoutes.post(
+  "/register",
+  rateLimit("register", 5, 900),
+  validate(registerSchema),
+  controller.register,
+);
+authRoutes.post(
+  "/login",
+  rateLimit("login", 15, 900),
+  validate(loginSchema),
+  controller.login,
+);
+authRoutes.post("/refresh", rateLimit("refresh", 60, 60), controller.refresh);
+authRoutes.post(
+  "/forgot-password",
+  rateLimit("forgot", 5, 900),
+  validate(emailSchema),
+  controller.forgot,
+);
+authRoutes.post(
+  "/resend-verification",
+  rateLimit("verify-resend", 10, 900),
+  validate(emailSchema),
+  controller.resend,
+);
+authRoutes.post(
+  "/verify-email",
+  rateLimit("verify", 20, 900),
+  validate(tokenSchema),
+  controller.verifyEmail,
+);
+authRoutes.post(
+  "/reset-password",
+  rateLimit("reset", 10, 900),
+  validate(resetSchema),
+  controller.reset,
+);
+authRoutes.use(requireAuth, rateLimit("auth-user", 120, 60));
+authRoutes.get("/me", controller.me);
+authRoutes.patch("/me", validate(profileSchema), controller.profile);
+authRoutes.post("/logout", controller.logout);
+authRoutes.post("/logout-all", controller.logoutAll);
+authRoutes.patch(
+  "/password",
+  validate(changePasswordSchema),
+  controller.changePassword,
+);
+authRoutes.get("/sessions", controller.sessions);
+authRoutes.param("sessionId", (_req, _res, next, value) => {
+  if (!z.string().uuid().safeParse(value).success)
+    return next(new HttpError(400, "Invalid session ID."));
+  next();
+});
+authRoutes.delete("/sessions/:sessionId", controller.revokeSession);

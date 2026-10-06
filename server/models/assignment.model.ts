@@ -1,6 +1,64 @@
-import type {Db} from '../configs/database.js';
-import {HttpError} from '../src/utils/errors.js';
-import type {Payload} from '../types/domain.js';
-export async function professionFor(db:Db,userId:string){const row=(await db.query("SELECT u.role,a.profession,a.active FROM users u LEFT JOIN assessor_assignments a ON a.email=u.email WHERE u.id=$1",[userId])).rows[0];if(row?.role==='admin')return '';if(!row?.active)throw new HttpError(403,'An admin must assign your email and profession before you can sign in.','ASSIGNMENT_REQUIRED');return row.profession as string;}
-export function scoped(payload:Payload,profession:string):Payload{return {...payload,captures:payload.captures.filter(c=>c.discipline===profession),elements:(payload.elements||[]).filter(e=>payload.captures.some(c=>c.area===e.area&&c.element===e.name&&c.discipline===profession))}}
-export function merge(previous:Payload,incoming:Payload,profession:string):Payload{const own=previous.captures.filter(c=>c.discipline===profession),ids=new Set(own.map(c=>c.id)),elements=new Set(own.map(c=>JSON.stringify([c.area,c.element])));for(const c of incoming.captures){if(c.discipline!==profession||!elements.has(JSON.stringify([c.area,c.element]))||(c.id&&previous.captures.some(old=>old.id===c.id)&&!ids.has(c.id)))throw new HttpError(403,'Only assigned profession findings may be captured.','PROFESSION_RESTRICTED');}return {...previous,captures:[...previous.captures.filter(c=>c.discipline!==profession),...incoming.captures]};}
+import type { Db } from "../configs/database.js";
+import { HttpError } from "../src/utils/errors.js";
+import type { Payload } from "../types/domain.js";
+
+export async function professionFor(db: Db, userId: string) {
+  const row = (
+    await db.query(
+      "SELECT u.role,a.profession,a.active FROM users u LEFT JOIN assessor_assignments a ON a.email=u.email WHERE u.id=$1",
+      [userId],
+    )
+  ).rows[0];
+  if (row?.role === "admin") return "";
+  if (!row?.active)
+    throw new HttpError(
+      403,
+      "An admin must assign your email and profession before you can sign in.",
+      "ASSIGNMENT_REQUIRED",
+    );
+  return row.profession as string;
+}
+export function scoped(payload: Payload, profession: string): Payload {
+  return {
+    ...payload,
+    captures: payload.captures.filter((c) => c.discipline === profession),
+    elements: (payload.elements || []).filter((e) =>
+      payload.captures.some(
+        (c) =>
+          c.area === e.area &&
+          c.element === e.name &&
+          c.discipline === profession,
+      ),
+    ),
+  };
+}
+export function merge(
+  previous: Payload,
+  incoming: Payload,
+  profession: string,
+): Payload {
+  const own = previous.captures.filter((c) => c.discipline === profession),
+    ids = new Set(own.map((c) => c.id)),
+    elements = new Set(own.map((c) => JSON.stringify([c.area, c.element])));
+  for (const c of incoming.captures) {
+    if (
+      c.discipline !== profession ||
+      !elements.has(JSON.stringify([c.area, c.element])) ||
+      (c.id &&
+        previous.captures.some((old) => old.id === c.id) &&
+        !ids.has(c.id))
+    )
+      throw new HttpError(
+        403,
+        "Only assigned profession findings may be captured.",
+        "PROFESSION_RESTRICTED",
+      );
+  }
+  return {
+    ...previous,
+    captures: [
+      ...previous.captures.filter((c) => c.discipline !== profession),
+      ...incoming.captures,
+    ],
+  };
+}

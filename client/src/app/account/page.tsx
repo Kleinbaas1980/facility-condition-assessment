@@ -1,12 +1,169 @@
-'use client';
-import { useEffect,useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/auth-context';
-import { authApi,type Session } from '@/api/auth';
-export default function Account(){const {user,loading,reload}=useAuth(),router=useRouter();const [name,setName]=useState(''),[current,setCurrent]=useState(''),[password,setPassword]=useState(''),[sessions,setSessions]=useState<Session[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
- useEffect(()=>{if(!loading&&!user){router.replace('/login');return}if(user){setName(user.name);void authApi.sessions().then(setSessions).catch(error=>setMessage(error.message))}},[user,loading,router]);
- async function action(work:()=>Promise<void>){setBusy(true);setMessage('');try{await work()}catch(e){setMessage(e instanceof Error?e.message:'The request failed.')}finally{setBusy(false)}}
- if(loading||!user)return <main className="auth-shell">Loading account…</main>;
- return <main className="account-shell stack"><Link href="/">← Home</Link><h1>Account</h1>{message&&<p role="status" className="auth-message">{message}</p>}<section className="card stack"><h2>Profile</h2><p>{user.email}</p><form className="stack" onSubmit={e=>{e.preventDefault();void action(async()=>{await authApi.profile(name);await reload();setMessage('Profile saved.')})}}><label>Full name<input required value={name} maxLength={160} onChange={e=>setName(e.target.value)} /></label><button disabled={busy} className="btn">Save profile</button></form></section><section className="card stack"><h2>Change password</h2><form className="stack" onSubmit={e=>{e.preventDefault();void action(async()=>{await authApi.password(current,password);await reload();router.replace('/login')})}}><label>Current password<input type="password" required value={current} autoComplete="current-password" onChange={e=>setCurrent(e.target.value)} /></label><label>New password<input type="password" required minLength={12} maxLength={128} autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} /></label><p>At least 12 characters: capital and lower-case letters, numbers and special characters.</p><button className="btn" disabled={busy}>Change password and sign out</button></form></section><section className="card"><h2>Signed-in sessions</h2>{sessions.map(session=><div className="session-row" key={session.id}><p>{session.current?'This session':session.userAgent||'Browser session'}</p><small>Created {new Date(session.createdAt).toLocaleString()}</small><button className="btn outline" disabled={busy} onClick={()=>void action(async()=>{await authApi.revoke(session.id);if(session.current){await reload();router.replace('/login')}else setSessions(await authApi.sessions())})}>Sign out session</button></div>)}<button disabled={busy} className="btn" onClick={()=>void action(async()=>{await authApi.logoutAll();await reload();router.replace('/login')})}>Sign out all devices</button></section></main>
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/auth-context";
+import { authApi, type Session } from "@/api/auth";
+
+export default function Account() {
+  const { user, loading, reload } = useAuth(),
+    router = useRouter();
+  const [name, setName] = useState(""),
+    [current, setCurrent] = useState(""),
+    [password, setPassword] = useState(""),
+    [sessions, setSessions] = useState<Session[]>([]),
+    [busy, setBusy] = useState(false),
+    [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+      return;
+    }
+    if (user) {
+      setName(user.name);
+      void authApi
+        .sessions()
+        .then(setSessions)
+        .catch((error) => setMessage(error.message));
+    }
+  }, [user, loading, router]);
+  async function action(work: () => Promise<void>) {
+    setBusy(true);
+    setMessage("");
+    try {
+      await work();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "The request failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (loading || !user)
+    return <main className="auth-shell">Loading account…</main>;
+  return (
+    <main className="account-shell stack">
+      <Link href="/">← Home</Link>
+      <h1>Account</h1>
+      {message && (
+        <p role="status" className="auth-message">
+          {message}
+        </p>
+      )}
+      <section className="card stack">
+        <h2>Profile</h2>
+        <p>{user.email}</p>
+        <form
+          className="stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void action(async () => {
+              await authApi.profile(name);
+              await reload();
+              setMessage("Profile saved.");
+            });
+          }}
+        >
+          <label>
+            Full name
+            <input
+              required
+              value={name}
+              maxLength={160}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+          <button disabled={busy} className="btn">
+            Save profile
+          </button>
+        </form>
+      </section>
+      <section className="card stack">
+        <h2>Change password</h2>
+        <form
+          className="stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void action(async () => {
+              await authApi.password(current, password);
+              await reload();
+              router.replace("/login");
+            });
+          }}
+        >
+          <label>
+            Current password
+            <input
+              type="password"
+              required
+              value={current}
+              autoComplete="current-password"
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </label>
+          <label>
+            New password
+            <input
+              type="password"
+              required
+              minLength={12}
+              maxLength={128}
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <p>
+            At least 12 characters: capital and lower-case letters, numbers and
+            special characters.
+          </p>
+          <button className="btn" disabled={busy}>
+            Change password and sign out
+          </button>
+        </form>
+      </section>
+      <section className="card">
+        <h2>Signed-in sessions</h2>
+        {sessions.map((session) => (
+          <div className="session-row" key={session.id}>
+            <p>
+              {session.current
+                ? "This session"
+                : session.userAgent || "Browser session"}
+            </p>
+            <small>
+              Created {new Date(session.createdAt).toLocaleString()}
+            </small>
+            <button
+              className="btn outline"
+              disabled={busy}
+              onClick={() =>
+                void action(async () => {
+                  await authApi.revoke(session.id);
+                  if (session.current) {
+                    await reload();
+                    router.replace("/login");
+                  } else setSessions(await authApi.sessions());
+                })
+              }
+            >
+              Sign out session
+            </button>
+          </div>
+        ))}
+        <button
+          disabled={busy}
+          className="btn"
+          onClick={() =>
+            void action(async () => {
+              await authApi.logoutAll();
+              await reload();
+              router.replace("/login");
+            })
+          }
+        >
+          Sign out all devices
+        </button>
+      </section>
+    </main>
+  );
 }

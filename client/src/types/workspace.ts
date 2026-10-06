@@ -1,24 +1,7 @@
-export type User = {
-  profession?: string;
-  role: "admin" | "assessor";
-  id: string;
-  name: string;
-  email: string;
-  verified: boolean;
-  createdAt: string;
-};
 export type Photo = { id: string; name: string; type: string };
-export type Area = {
-  id?: string;
-  code: string;
-  unit: string;
-  type: string;
-  name: string;
-  sqm: number | null;
-};
-
 export type Capture = {
   id?: string;
+  photos?: Photo[];
   area: string;
   section: string;
   element: string;
@@ -37,7 +20,14 @@ export type Capture = {
   ratings: number[];
   comment: string;
   discipline: string;
-  photos?: Photo[];
+};
+export type Area = {
+  id?: string;
+  code: string;
+  unit: string;
+  type: string;
+  name: string;
+  sqm: number | null;
 };
 export type Payload = {
   areas: Area[];
@@ -50,41 +40,34 @@ export type Project = {
   companyAddress?: string;
   clientAddress?: string;
   id: string;
-  seq: number;
+  seq?: number;
+  version: number;
   name: string;
   assetNumber: string;
   client: string;
   discipline: string;
-  assessorName: string;
-  assessorRole: string;
-  assessorRegistration: string;
   updatedAt: number;
-  version: number;
-  payload: Payload;
   sitePlanName?: string;
   facilityLogoName?: string;
   companyLogoName?: string;
   assessorSignatureName?: string;
+  assessorName?: string;
+  assessorRole?: string;
+  assessorRegistration?: string;
+  payload: Payload;
 };
-export type ProjectInput = Pick<
-  Project,
-  "name" | "assetNumber" | "client" | "discipline" | "payload"
-> &
-  Partial<
-    Pick<
-      Project,
-      | "companyName"
-      | "companyAddress"
-      | "clientAddress"
-      | "assessorName"
-      | "assessorRole"
-      | "assessorRegistration"
-      | "version"
-    >
-  >;
-export type AssetKind =
-  | "site-plan"
-  | "facility-logo"
-  | "company-logo"
-  | "assessor-signature"
-  | "photo";
+export type Summary = Omit<Project, "payload">;
+export const labels = [
+  "C1 Very good",
+  "C2 Good",
+  "C3 Fair",
+  "C4 Poor",
+  "C5 Very poor",
+];
+export const ratingColors = [
+  "#19866b",
+  "#83ae43",
+  "#e4aa2c",
+  "#df772e",
+  "#c94a47",
+];

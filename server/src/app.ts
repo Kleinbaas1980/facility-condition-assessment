@@ -12,6 +12,7 @@ import { projectRoutes } from "../routes/project.routes.js";
 import { protectMutations } from "../middleware/csrf.js";
 import { errorHandler } from "../middleware/errors.js";
 export const app = express();
+
 app.disable("x-powered-by");
 app.set("trust proxy", env.TRUST_PROXY_HOPS);
 app.use(helmet({ crossOriginResourcePolicy: { policy: "same-site" } }));

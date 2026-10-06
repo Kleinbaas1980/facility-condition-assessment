@@ -1,1 +1,2 @@
 CREATE TABLE assessor_assignments(email varchar(254) PRIMARY KEY CHECK(email=lower(email)),name varchar(160) NOT NULL,profession varchar(60) NOT NULL CHECK(profession IN ('Architect','Plumber','Electrician','Structural Engineer','Fire Engineer','Mechanical Engineer','Civil Engineer')),active boolean NOT NULL DEFAULT true,updated_by uuid NOT NULL REFERENCES users(id),updated_at timestamptz NOT NULL DEFAULT now());
+

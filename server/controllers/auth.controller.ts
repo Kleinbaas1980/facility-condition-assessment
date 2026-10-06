@@ -1,33 +1,331 @@
-import {professionFor} from '../models/assignment.model.js';
-import type { Request,Response } from 'express';
-import { randomUUID } from 'node:crypto';
-import { pool,transaction } from '../configs/database.js';
-import { env } from '../configs/env.js';
-import { byEmail,byId,publicUser } from '../models/user.model.js';
-import { hashPassword,verifyPassword,digest,randomToken,constantEqual } from '../src/utils/crypto.js';
-import { issueAccess,issueRefresh,verifyToken } from '../src/utils/tokens.js';
-import { setAuthCookies,clearAuthCookies } from '../src/utils/cookies.js';
-import { sendTokenEmail } from '../src/services/mail.service.js';
-import { HttpError } from '../src/utils/errors.js';
-import { logger } from '../configs/logger.js';
-import type { UserRow } from '../models/user.model.js';
-const auth=(req:Request)=>req.auth!;
-const fallbackPasswordHash=hashPassword(randomToken());
-async function emailToken(user:UserRow,purpose:'verify'|'reset'){
- const token=randomToken();await transaction(async db=>{await db.query('UPDATE auth_tokens SET used_at=now() WHERE user_id=$1 AND purpose=$2 AND used_at IS NULL',[user.id,purpose]);await db.query('INSERT INTO auth_tokens(id,user_id,purpose,token_hash,expires_at) VALUES($1,$2,$3,$4,now()+($5 * interval \'1 minute\'))',[randomUUID(),user.id,purpose,digest(token),purpose==='verify'?1440:30])});
- try{await sendTokenEmail(user.email,token,purpose)}catch(error){logger.error({userId:user.id,error:error instanceof Error?error.message:'SMTP failure'},'Account email delivery failed');throw new HttpError(503,'Email delivery is unavailable. Please try again.','MAIL_UNAVAILABLE')}
+import { professionFor } from "../models/assignment.model.js";
+import type { Request, Response } from "express";
+import { randomUUID } from "node:crypto";
+import { pool, transaction } from "../configs/database.js";
+import { env } from "../configs/env.js";
+import { byEmail, byId, publicUser } from "../models/user.model.js";
+import {
+  hashPassword,
+  verifyPassword,
+  digest,
+  randomToken,
+  constantEqual,
+} from "../src/utils/crypto.js";
+import { issueAccess, issueRefresh, verifyToken } from "../src/utils/tokens.js";
+import { setAuthCookies, clearAuthCookies } from "../src/utils/cookies.js";
+import { sendTokenEmail } from "../src/services/mail.service.js";
+import { HttpError } from "../src/utils/errors.js";
+import { logger } from "../configs/logger.js";
+import type { UserRow } from "../models/user.model.js";
+//.
+const auth = (req: Request) => req.auth!;
+const fallbackPasswordHash = hashPassword(randomToken());
+async function emailToken(user: UserRow, purpose: "verify" | "reset") {
+  const token = randomToken();
+  await transaction(async (db) => {
+    await db.query(
+      "UPDATE auth_tokens SET used_at=now() WHERE user_id=$1 AND purpose=$2 AND used_at IS NULL",
+      [user.id, purpose],
+    );
+    await db.query(
+      "INSERT INTO auth_tokens(id,user_id,purpose,token_hash,expires_at) VALUES($1,$2,$3,$4,now()+($5 * interval '1 minute'))",
+      [
+        randomUUID(),
+        user.id,
+        purpose,
+        digest(token),
+        purpose === "verify" ? 1440 : 30,
+      ],
+    );
+  });
+  try {
+    await sendTokenEmail(user.email, token, purpose);
+  } catch (error) {
+    logger.error(
+      {
+        userId: user.id,
+        error: error instanceof Error ? error.message : "SMTP failure",
+      },
+      "Account email delivery failed",
+    );
+    throw new HttpError(
+      503,
+      "Email delivery is unavailable. Please try again.",
+      "MAIL_UNAVAILABLE",
+    );
+  }
 }
-export async function register(req:Request,res:Response){const body=req.validated as {name:string;email:string;password:string};const passwordHash=await hashPassword(body.password);const created=await pool.query<UserRow>('INSERT INTO users(id,name,email,password_hash) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING *',[randomUUID(),body.name,body.email,passwordHash]);if(created.rows[0])await emailToken(created.rows[0],'verify');res.status(202).json({message:'If this address can be registered, a verification link has been sent. Existing users can sign in or recover their password.'})}
-export async function login(req:Request,res:Response){const body=req.validated as {email:string;password:string};const user=await byEmail(body.email);const stored=user?.password_hash||await fallbackPasswordHash;const valid=await verifyPassword(body.password,stored);if(!user||!valid)throw new HttpError(401,'Incorrect email address or password.','INVALID_CREDENTIALS');await professionFor(pool,user.id);if(!user.email_verified_at)throw new HttpError(403,'Verify your email address before signing in.','EMAIL_UNVERIFIED');const sessionId=randomUUID(),expiresAt=new Date(Date.now()+env.REFRESH_TOKEN_DAYS*86400000),refresh=issueRefresh(user.id,sessionId,expiresAt);await pool.query('INSERT INTO auth_sessions(id,user_id,refresh_hash,expires_at,user_agent,ip_hash) VALUES($1,$2,$3,$4,$5,$6)',[sessionId,user.id,digest(refresh),expiresAt,(req.get('user-agent')||'').slice(0,500),digest(req.ip||'')]);setAuthCookies(res,issueAccess(user.id,sessionId),refresh,expiresAt);res.json({user:publicUser(user),accessExpiresAt:Date.now()+env.ACCESS_TOKEN_MINUTES*60000})}
-export async function refresh(req:Request,res:Response){const raw=req.cookies?.fca_refresh;if(typeof raw!=='string')throw new HttpError(401,'Please sign in again.','UNAUTHENTICATED');const claims=verifyToken(raw,'refresh');await professionFor(pool,claims.sub);const result=await transaction(async db=>{const row=(await db.query('SELECT s.*,u.email_verified_at FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.user_id=$2 FOR UPDATE OF s',[claims.sid,claims.sub])).rows[0];if(!row||row.revoked_at||new Date(row.expires_at).getTime()<=Date.now()||!row.email_verified_at)return {invalid:true} as const;const hash=digest(raw);if(!constantEqual(hash,row.refresh_hash)){const grace=row.previous_refresh_hash&&constantEqual(hash,row.previous_refresh_hash)&&row.rotated_at&&Date.now()-new Date(row.rotated_at).getTime()<5000;if(grace)return {expiresAt:new Date(row.expires_at),refresh:undefined};await db.query('UPDATE auth_sessions SET revoked_at=now() WHERE id=$1',[claims.sid]);return {invalid:true} as const}const token=issueRefresh(claims.sub,claims.sid,new Date(row.expires_at));await db.query('UPDATE auth_sessions SET previous_refresh_hash=refresh_hash,refresh_hash=$1,rotated_at=now() WHERE id=$2',[digest(token),claims.sid]);return {expiresAt:new Date(row.expires_at),refresh:token}});if('invalid' in result){clearAuthCookies(res);throw new HttpError(401,'Please sign in again.','UNAUTHENTICATED')}setAuthCookies(res,issueAccess(claims.sub,claims.sid),result.refresh,result.expiresAt);res.json({ok:true,accessExpiresAt:Date.now()+env.ACCESS_TOKEN_MINUTES*60000})}
-export async function me(req:Request,res:Response){const user=await byId(auth(req).userId);if(!user)throw new HttpError(401,'Please sign in again.');res.json({user:publicUser(user),accessExpiresAt:req.auth!.accessExpiresAt})}
-export async function profile(req:Request,res:Response){const body=req.validated as {name:string};const result=await pool.query<UserRow>('UPDATE users SET name=$1,updated_at=now() WHERE id=$2 RETURNING *',[body.name,auth(req).userId]);res.json({user:publicUser(result.rows[0])})}
-export async function logout(req:Request,res:Response){await pool.query('UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2',[auth(req).sessionId,auth(req).userId]);clearAuthCookies(res);res.json({ok:true})}
-export async function logoutAll(req:Request,res:Response){await pool.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',[auth(req).userId]);clearAuthCookies(res);res.json({ok:true})}
-export async function forgot(req:Request,res:Response){const {email}=req.validated as {email:string};const user=await byEmail(email);if(user?.email_verified_at)await emailToken(user,'reset');res.status(202).json({message:'If this email has an account, a password reset link has been sent.'})}
-export async function resend(req:Request,res:Response){const {email}=req.validated as {email:string};const user=await byEmail(email);if(user&&!user.email_verified_at)await emailToken(user,'verify');res.status(202).json({message:'If the account needs verification, a new link has been sent.'})}
-export async function verifyEmail(req:Request,res:Response){const {token}=req.validated as {token:string};await transaction(async db=>{const row=(await db.query('SELECT * FROM auth_tokens WHERE token_hash=$1 AND purpose=\'verify\' AND used_at IS NULL AND expires_at>now() FOR UPDATE',[digest(token)])).rows[0];if(!row)throw new HttpError(400,'This verification link is invalid or expired.','TOKEN_INVALID');await db.query('UPDATE users SET email_verified_at=now(),updated_at=now() WHERE id=$1',[row.user_id]);await db.query('UPDATE auth_tokens SET used_at=now() WHERE user_id=$1 AND purpose=\'verify\' AND used_at IS NULL',[row.user_id])});res.json({message:'Email verified. You can now sign in.'})}
-export async function reset(req:Request,res:Response){const {token,password}=req.validated as {token:string;password:string};const passwordHash=await hashPassword(password);await transaction(async db=>{const row=(await db.query('SELECT * FROM auth_tokens WHERE token_hash=$1 AND purpose=\'reset\' AND used_at IS NULL AND expires_at>now() FOR UPDATE',[digest(token)])).rows[0];if(!row)throw new HttpError(400,'This password reset link is invalid or expired.','TOKEN_INVALID');await db.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[passwordHash,row.user_id]);await db.query('UPDATE auth_tokens SET used_at=now() WHERE user_id=$1 AND purpose=\'reset\' AND used_at IS NULL',[row.user_id]);await db.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1',[row.user_id])});clearAuthCookies(res);res.json({message:'Password changed. Sign in with your new password.'})}
-export async function changePassword(req:Request,res:Response){const body=req.validated as {currentPassword:string;password:string};const user=await byId(auth(req).userId);if(!user||!await verifyPassword(body.currentPassword,user.password_hash))throw new HttpError(400,'Current password is incorrect.');const passwordHash=await hashPassword(body.password);await transaction(async db=>{await db.query('UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2',[passwordHash,user.id]);await db.query('UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1',[user.id])});clearAuthCookies(res);res.json({message:'Password changed. Sign in again.'})}
-export async function sessions(req:Request,res:Response){const rows=await pool.query('SELECT id,created_at AS "createdAt",expires_at AS "expiresAt",user_agent AS "userAgent" FROM auth_sessions WHERE user_id=$1 AND revoked_at IS NULL AND expires_at>now() ORDER BY created_at DESC',[auth(req).userId]);res.json({sessions:rows.rows.map(row=>({...row,current:row.id===auth(req).sessionId}))})}
-export async function revokeSession(req:Request,res:Response){const result=await pool.query('UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2 RETURNING id',[req.params.sessionId,auth(req).userId]);if(!result.rowCount)throw new HttpError(404,'Session not found.');if(req.params.sessionId===auth(req).sessionId)clearAuthCookies(res);res.json({ok:true})}
+export async function register(req: Request, res: Response) {
+  const body = req.validated as {
+    name: string;
+    email: string;
+    password: string;
+  };
+  const passwordHash = await hashPassword(body.password);
+  const created = await pool.query<UserRow>(
+    "INSERT INTO users(id,name,email,password_hash) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING *",
+    [randomUUID(), body.name, body.email, passwordHash],
+  );
+  if (created.rows[0]) await emailToken(created.rows[0], "verify");
+  res
+    .status(202)
+    .json({
+      message:
+        "If this address can be registered, a verification link has been sent. Existing users can sign in or recover their password.",
+    });
+}
+export async function login(req: Request, res: Response) {
+  const body = req.validated as { email: string; password: string };
+  const user = await byEmail(body.email);
+  const stored = user?.password_hash || (await fallbackPasswordHash);
+  const valid = await verifyPassword(body.password, stored);
+  if (!user || !valid)
+    throw new HttpError(
+      401,
+      "Incorrect email address or password.",
+      "INVALID_CREDENTIALS",
+    );
+  await professionFor(pool, user.id);
+  if (!user.email_verified_at)
+    throw new HttpError(
+      403,
+      "Verify your email address before signing in.",
+      "EMAIL_UNVERIFIED",
+    );
+  const sessionId = randomUUID(),
+    expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_DAYS * 86400000),
+    refresh = issueRefresh(user.id, sessionId, expiresAt);
+  await pool.query(
+    "INSERT INTO auth_sessions(id,user_id,refresh_hash,expires_at,user_agent,ip_hash) VALUES($1,$2,$3,$4,$5,$6)",
+    [
+      sessionId,
+      user.id,
+      digest(refresh),
+      expiresAt,
+      (req.get("user-agent") || "").slice(0, 500),
+      digest(req.ip || ""),
+    ],
+  );
+  setAuthCookies(res, issueAccess(user.id, sessionId), refresh, expiresAt);
+  res.json({
+    user: publicUser(user),
+    accessExpiresAt: Date.now() + env.ACCESS_TOKEN_MINUTES * 60000,
+  });
+}
+export async function refresh(req: Request, res: Response) {
+  const raw = req.cookies?.fca_refresh;
+  if (typeof raw !== "string")
+    throw new HttpError(401, "Please sign in again.", "UNAUTHENTICATED");
+  const claims = verifyToken(raw, "refresh");
+  await professionFor(pool, claims.sub);
+  const result = await transaction(async (db) => {
+    const row = (
+      await db.query(
+        "SELECT s.*,u.email_verified_at FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.user_id=$2 FOR UPDATE OF s",
+        [claims.sid, claims.sub],
+      )
+    ).rows[0];
+    if (
+      !row ||
+      row.revoked_at ||
+      new Date(row.expires_at).getTime() <= Date.now() ||
+      !row.email_verified_at
+    )
+      return { invalid: true } as const;
+    const hash = digest(raw);
+    if (!constantEqual(hash, row.refresh_hash)) {
+      const grace =
+        row.previous_refresh_hash &&
+        constantEqual(hash, row.previous_refresh_hash) &&
+        row.rotated_at &&
+        Date.now() - new Date(row.rotated_at).getTime() < 5000;
+      if (grace)
+        return { expiresAt: new Date(row.expires_at), refresh: undefined };
+      await db.query("UPDATE auth_sessions SET revoked_at=now() WHERE id=$1", [
+        claims.sid,
+      ]);
+      return { invalid: true } as const;
+    }
+    const token = issueRefresh(
+      claims.sub,
+      claims.sid,
+      new Date(row.expires_at),
+    );
+    await db.query(
+      "UPDATE auth_sessions SET previous_refresh_hash=refresh_hash,refresh_hash=$1,rotated_at=now() WHERE id=$2",
+      [digest(token), claims.sid],
+    );
+    return { expiresAt: new Date(row.expires_at), refresh: token };
+  });
+  if ("invalid" in result) {
+    clearAuthCookies(res);
+    throw new HttpError(401, "Please sign in again.", "UNAUTHENTICATED");
+  }
+  setAuthCookies(
+    res,
+    issueAccess(claims.sub, claims.sid),
+    result.refresh,
+    result.expiresAt,
+  );
+  res.json({
+    ok: true,
+    accessExpiresAt: Date.now() + env.ACCESS_TOKEN_MINUTES * 60000,
+  });
+}
+export async function me(req: Request, res: Response) {
+  const user = await byId(auth(req).userId);
+  if (!user) throw new HttpError(401, "Please sign in again.");
+  res.json({
+    user: publicUser(user),
+    accessExpiresAt: req.auth!.accessExpiresAt,
+  });
+}
+export async function profile(req: Request, res: Response) {
+  const body = req.validated as { name: string };
+  const result = await pool.query<UserRow>(
+    "UPDATE users SET name=$1,updated_at=now() WHERE id=$2 RETURNING *",
+    [body.name, auth(req).userId],
+  );
+  res.json({ user: publicUser(result.rows[0]) });
+}
+export async function logout(req: Request, res: Response) {
+  await pool.query(
+    "UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2",
+    [auth(req).sessionId, auth(req).userId],
+  );
+  clearAuthCookies(res);
+  res.json({ ok: true });
+}
+export async function logoutAll(req: Request, res: Response) {
+  await pool.query(
+    "UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL",
+    [auth(req).userId],
+  );
+  clearAuthCookies(res);
+  res.json({ ok: true });
+}
+export async function forgot(req: Request, res: Response) {
+  const { email } = req.validated as { email: string };
+  const user = await byEmail(email);
+  if (user?.email_verified_at) await emailToken(user, "reset");
+  res
+    .status(202)
+    .json({
+      message:
+        "If this email has an account, a password reset link has been sent.",
+    });
+}
+export async function resend(req: Request, res: Response) {
+  const { email } = req.validated as { email: string };
+  const user = await byEmail(email);
+  if (user && !user.email_verified_at) await emailToken(user, "verify");
+  res
+    .status(202)
+    .json({
+      message: "If the account needs verification, a new link has been sent.",
+    });
+}
+export async function verifyEmail(req: Request, res: Response) {
+  const { token } = req.validated as { token: string };
+  await transaction(async (db) => {
+    const row = (
+      await db.query(
+        "SELECT * FROM auth_tokens WHERE token_hash=$1 AND purpose='verify' AND used_at IS NULL AND expires_at>now() FOR UPDATE",
+        [digest(token)],
+      )
+    ).rows[0];
+    if (!row)
+      throw new HttpError(
+        400,
+        "This verification link is invalid or expired.",
+        "TOKEN_INVALID",
+      );
+    await db.query(
+      "UPDATE users SET email_verified_at=now(),updated_at=now() WHERE id=$1",
+      [row.user_id],
+    );
+    await db.query(
+      "UPDATE auth_tokens SET used_at=now() WHERE user_id=$1 AND purpose='verify' AND used_at IS NULL",
+      [row.user_id],
+    );
+  });
+  res.json({ message: "Email verified. You can now sign in." });
+}
+export async function reset(req: Request, res: Response) {
+  const { token, password } = req.validated as {
+    token: string;
+    password: string;
+  };
+  const passwordHash = await hashPassword(password);
+  await transaction(async (db) => {
+    const row = (
+      await db.query(
+        "SELECT * FROM auth_tokens WHERE token_hash=$1 AND purpose='reset' AND used_at IS NULL AND expires_at>now() FOR UPDATE",
+        [digest(token)],
+      )
+    ).rows[0];
+    if (!row)
+      throw new HttpError(
+        400,
+        "This password reset link is invalid or expired.",
+        "TOKEN_INVALID",
+      );
+    await db.query(
+      "UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2",
+      [passwordHash, row.user_id],
+    );
+    await db.query(
+      "UPDATE auth_tokens SET used_at=now() WHERE user_id=$1 AND purpose='reset' AND used_at IS NULL",
+      [row.user_id],
+    );
+    await db.query(
+      "UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1",
+      [row.user_id],
+    );
+  });
+  clearAuthCookies(res);
+  res.json({ message: "Password changed. Sign in with your new password." });
+}
+export async function changePassword(req: Request, res: Response) {
+  const body = req.validated as { currentPassword: string; password: string };
+  const user = await byId(auth(req).userId);
+  if (
+    !user ||
+    !(await verifyPassword(body.currentPassword, user.password_hash))
+  )
+    throw new HttpError(400, "Current password is incorrect.");
+  const passwordHash = await hashPassword(body.password);
+  await transaction(async (db) => {
+    await db.query(
+      "UPDATE users SET password_hash=$1,updated_at=now() WHERE id=$2",
+      [passwordHash, user.id],
+    );
+    await db.query(
+      "UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1",
+      [user.id],
+    );
+  });
+  clearAuthCookies(res);
+  res.json({ message: "Password changed. Sign in again." });
+}
+export async function sessions(req: Request, res: Response) {
+  const rows = await pool.query(
+    'SELECT id,created_at AS "createdAt",expires_at AS "expiresAt",user_agent AS "userAgent" FROM auth_sessions WHERE user_id=$1 AND revoked_at IS NULL AND expires_at>now() ORDER BY created_at DESC',
+    [auth(req).userId],
+  );
+  res.json({
+    sessions: rows.rows.map((row) => ({
+      ...row,
+      current: row.id === auth(req).sessionId,
+    })),
+  });
+}
+export async function revokeSession(req: Request, res: Response) {
+  const result = await pool.query(
+    "UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2 RETURNING id",
+    [req.params.sessionId, auth(req).userId],
+  );
+  if (!result.rowCount) throw new HttpError(404, "Session not found.");
+  if (req.params.sessionId === auth(req).sessionId) clearAuthCookies(res);
+  res.json({ ok: true });
+}
