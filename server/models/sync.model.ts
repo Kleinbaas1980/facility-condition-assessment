@@ -14,6 +14,7 @@ const DECIMALS: Record<string, number> = {
   unitRate: 2,
   remedialCost: 2,
 };
+
 const NUMERIC = new Set([
   ...Object.keys(DECIMALS),
   "pg",
@@ -21,6 +22,7 @@ const NUMERIC = new Set([
   "contingency",
   "vat",
 ]);
+
 const num = (f: string, v: unknown) =>
   Number(Number(v).toFixed(DECIMALS[f] ?? 10));
 // MUST behave exactly like same() in the client lib/sync.ts

@@ -14,9 +14,12 @@ export const constantEqual = (a: string, b: string) => {
     right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
 };
+
 export const hmac = (text: string, secret: string) =>
   createHmac("sha256", secret).update(text).digest("base64url");
+
 const options = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+
 function scrypt(password: string, salt: string): Promise<Buffer> {
   return new Promise((resolve, reject) =>
     derive(password, salt, 64, options, (error, key) =>
@@ -24,10 +27,12 @@ function scrypt(password: string, salt: string): Promise<Buffer> {
     ),
   );
 }
+
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   return `scrypt$32768$8$1$${salt}$${(await scrypt(password, salt)).toString("hex")}`;
 }
+
 export async function verifyPassword(password: string, stored: string) {
   const pieces = stored.split("$");
   if (

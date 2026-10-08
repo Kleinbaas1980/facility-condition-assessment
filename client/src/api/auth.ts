@@ -27,9 +27,11 @@ export const authApi = {
   logoutAll: async () => {
     await http.post("/auth/logout-all");
   },
+
   forgot: async (email: string) =>
     (await http.post<{ message: string }>("/auth/forgot-password", { email }))
       .data,
+
   resend: async (email: string) =>
     (
       await http.post<{ message: string }>("/auth/resend-verification", {

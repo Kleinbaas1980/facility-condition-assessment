@@ -33,7 +33,7 @@ authRoutes.post(
 authRoutes.post("/refresh", rateLimit("refresh", 60, 60), controller.refresh);
 authRoutes.post(
   "/forgot-password",
-  rateLimit("forgot", 5, 900),
+  rateLimit("forgot", 10, 900),
   validate(emailSchema),
   controller.forgot,
 );

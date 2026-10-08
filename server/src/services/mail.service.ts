@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { env } from "../../configs/env.js";
+
 export const transport = nodemailer.createTransport({
   host: env.SMTP_HOST,
   port: env.SMTP_PORT,
@@ -9,6 +10,7 @@ export const transport = nodemailer.createTransport({
   connectionTimeout: 10000,
   socketTimeout: 20000,
 });
+
 export async function sendTokenEmail(
   email: string,
   token: string,
@@ -21,12 +23,11 @@ export async function sendTokenEmail(
     from: env.SMTP_FROM,
     to: email,
     subject:
-      purpose === "verify"
-        ? "Verify your FCA account"
-        : "Reset your FCA password",
+      purpose === "verify" ? "Verify your account" : "Reset your password",
     text: `${purpose === "verify" ? "Verify your email address" : "Reset your password"} using this link:\n\n${url.toString()}\n\nThis link expires ${purpose === "verify" ? "in 24 hours" : "in 30 minutes"} and can be used once. If you did not request this, ignore the message.`,
   });
 }
+
 export async function sendReport(
   email: string,
   projectName: string,

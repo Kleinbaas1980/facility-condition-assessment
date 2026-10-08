@@ -17,9 +17,11 @@ import { sendTokenEmail } from "../src/services/mail.service.js";
 import { HttpError } from "../src/utils/errors.js";
 import { logger } from "../configs/logger.js";
 import type { UserRow } from "../models/user.model.js";
-//.
+
 const auth = (req: Request) => req.auth!;
+
 const fallbackPasswordHash = hashPassword(randomToken());
+
 async function emailToken(user: UserRow, purpose: "verify" | "reset") {
   const token = randomToken();
   await transaction(async (db) => {
@@ -55,25 +57,27 @@ async function emailToken(user: UserRow, purpose: "verify" | "reset") {
     );
   }
 }
+
 export async function register(req: Request, res: Response) {
   const body = req.validated as {
     name: string;
     email: string;
     password: string;
   };
+
   const passwordHash = await hashPassword(body.password);
+
   const created = await pool.query<UserRow>(
     "INSERT INTO users(id,name,email,password_hash) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING *",
     [randomUUID(), body.name, body.email, passwordHash],
   );
   if (created.rows[0]) await emailToken(created.rows[0], "verify");
-  res
-    .status(202)
-    .json({
-      message:
-        "If this address can be registered, a verification link has been sent. Existing users can sign in or recover their password.",
-    });
+  res.status(202).json({
+    message:
+      "If this address can be registered, a verification link has been sent. Existing users can sign in or recover their password.",
+  });
 }
+
 export async function login(req: Request, res: Response) {
   const body = req.validated as { email: string; password: string };
   const user = await byEmail(body.email);
@@ -112,6 +116,7 @@ export async function login(req: Request, res: Response) {
     accessExpiresAt: Date.now() + env.ACCESS_TOKEN_MINUTES * 60000,
   });
 }
+
 export async function refresh(req: Request, res: Response) {
   const raw = req.cookies?.fca_refresh;
   if (typeof raw !== "string")
@@ -172,6 +177,7 @@ export async function refresh(req: Request, res: Response) {
     accessExpiresAt: Date.now() + env.ACCESS_TOKEN_MINUTES * 60000,
   });
 }
+
 export async function me(req: Request, res: Response) {
   const user = await byId(auth(req).userId);
   if (!user) throw new HttpError(401, "Please sign in again.");
@@ -180,6 +186,7 @@ export async function me(req: Request, res: Response) {
     accessExpiresAt: req.auth!.accessExpiresAt,
   });
 }
+
 export async function profile(req: Request, res: Response) {
   const body = req.validated as { name: string };
   const result = await pool.query<UserRow>(
@@ -188,6 +195,7 @@ export async function profile(req: Request, res: Response) {
   );
   res.json({ user: publicUser(result.rows[0]) });
 }
+
 export async function logout(req: Request, res: Response) {
   await pool.query(
     "UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2",
@@ -196,6 +204,7 @@ export async function logout(req: Request, res: Response) {
   clearAuthCookies(res);
   res.json({ ok: true });
 }
+
 export async function logoutAll(req: Request, res: Response) {
   await pool.query(
     "UPDATE auth_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL",
@@ -204,27 +213,26 @@ export async function logoutAll(req: Request, res: Response) {
   clearAuthCookies(res);
   res.json({ ok: true });
 }
+
 export async function forgot(req: Request, res: Response) {
   const { email } = req.validated as { email: string };
   const user = await byEmail(email);
   if (user?.email_verified_at) await emailToken(user, "reset");
-  res
-    .status(202)
-    .json({
-      message:
-        "If this email has an account, a password reset link has been sent.",
-    });
+  res.status(202).json({
+    message:
+      "If this email has an account, a password reset link has been sent.",
+  });
 }
+
 export async function resend(req: Request, res: Response) {
   const { email } = req.validated as { email: string };
   const user = await byEmail(email);
   if (user && !user.email_verified_at) await emailToken(user, "verify");
-  res
-    .status(202)
-    .json({
-      message: "If the account needs verification, a new link has been sent.",
-    });
+  res.status(202).json({
+    message: "If the account needs verification, a new link has been sent.",
+  });
 }
+
 export async function verifyEmail(req: Request, res: Response) {
   const { token } = req.validated as { token: string };
   await transaction(async (db) => {
@@ -251,12 +259,15 @@ export async function verifyEmail(req: Request, res: Response) {
   });
   res.json({ message: "Email verified. You can now sign in." });
 }
+
 export async function reset(req: Request, res: Response) {
   const { token, password } = req.validated as {
     token: string;
     password: string;
   };
+
   const passwordHash = await hashPassword(password);
+
   await transaction(async (db) => {
     const row = (
       await db.query(
@@ -286,6 +297,7 @@ export async function reset(req: Request, res: Response) {
   clearAuthCookies(res);
   res.json({ message: "Password changed. Sign in with your new password." });
 }
+
 export async function changePassword(req: Request, res: Response) {
   const body = req.validated as { currentPassword: string; password: string };
   const user = await byId(auth(req).userId);
@@ -308,6 +320,7 @@ export async function changePassword(req: Request, res: Response) {
   clearAuthCookies(res);
   res.json({ message: "Password changed. Sign in again." });
 }
+
 export async function sessions(req: Request, res: Response) {
   const rows = await pool.query(
     'SELECT id,created_at AS "createdAt",expires_at AS "expiresAt",user_agent AS "userAgent" FROM auth_sessions WHERE user_id=$1 AND revoked_at IS NULL AND expires_at>now() ORDER BY created_at DESC',
@@ -320,6 +333,7 @@ export async function sessions(req: Request, res: Response) {
     })),
   });
 }
+
 export async function revokeSession(req: Request, res: Response) {
   const result = await pool.query(
     "UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2 RETURNING id",

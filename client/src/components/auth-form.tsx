@@ -1,9 +1,11 @@
 "use client";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/api/auth";
 import { useAuth } from "@/context/auth-context";
+
 export type AuthMode = "login" | "register" | "forgot" | "reset" | "verify";
 
 export default function AuthForm({
@@ -31,7 +33,8 @@ export default function AuthForm({
     reset: "Set a new password",
     verify: "Verify your email",
   };
-  async function submit(e: React.FormEvent) {
+
+  async function submit(e: React.SubmitEvent) {
     e.preventDefault();
     setBusy(true);
     setMessage("");

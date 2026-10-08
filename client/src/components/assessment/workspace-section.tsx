@@ -19,7 +19,7 @@ interface WorkspaceProps {
   assignedProfession: string;
   setAddingArea: Dispatch<SetStateAction<boolean>>;
   addingArea: boolean;
-  addArea(e: React.FormEvent): void;
+  addArea(e: React.SubmitEvent): void;
   setNewAreaName: Dispatch<SetStateAction<string>>;
   setNewAreaType: Dispatch<SetStateAction<string>>;
   setNewAreaUnit: Dispatch<SetStateAction<string>>;

@@ -1,5 +1,6 @@
 import { pool, type Db } from "../configs/database.js";
 import type { User } from "../types/domain.js";
+
 export type UserRow = {
   profession?: string;
   role: "admin" | "assessor";
@@ -10,6 +11,7 @@ export type UserRow = {
   email_verified_at: Date | null;
   created_at: Date;
 };
+
 export async function byEmail(email: string, db: Db = pool) {
   return (
     await db.query<UserRow>(
@@ -18,6 +20,7 @@ export async function byEmail(email: string, db: Db = pool) {
     )
   ).rows[0];
 }
+
 export async function byId(id: string, db: Db = pool) {
   return (
     await db.query<UserRow>(
@@ -26,6 +29,7 @@ export async function byId(id: string, db: Db = pool) {
     )
   ).rows[0];
 }
+
 export const publicUser = (user: UserRow): User => ({
   profession: user.profession,
   role: user.role,
