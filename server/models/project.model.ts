@@ -9,7 +9,7 @@ import type {
   Capture,
 } from "../types/domain.js";
 
-const canAccess = (alias: string, user: string) => `(
+export const canAccess = (alias: string, user: string) => `(
   ${alias}.owner_id=${user}
   OR EXISTS(SELECT 1 FROM users WHERE id=${user} AND role='admin')
   OR EXISTS(SELECT 1 FROM project_assignments pa WHERE pa.project_id=${alias}.id AND pa.user_id=${user})

@@ -1332,23 +1332,52 @@ export default function AssessmentWorkspace() {
 
   useEffect(() => {
     if (!project?.id) return;
-    const tick = () => {
-      if (!document.hidden) void pull();
+    let stopped = false,
+      timer: ReturnType<typeof setTimeout> | undefined;
+    let delay = 15_000,
+      lastInput = Date.now();
+
+    async function loop() {
+      if (stopped) return;
+      const idle = Date.now() - lastInput;
+      if (!document.hidden && idle < 10 * 60_000) {
+        const changed = await pull();
+        delay = changed! ? 15_000 : Math.min(delay * 2, 60_000);
+      }
+      timer = setTimeout(loop, idle > 2 * 60_000 ? 60_000 : delay);
+    }
+    const bump = () => {
+      const asleep = Date.now() - lastInput > 10 * 60_000;
+      lastInput = Date.now();
+      delay = 15_000;
+      if (asleep) {
+        clearTimeout(timer);
+        void loop();
+      }
     };
     const vis = () => {
       if (document.hidden) flush();
-      else void pull();
+      else {
+        bump();
+        void pull();
+      }
     };
-    const t = setInterval(tick, 15_000);
     const warn = (e: BeforeUnloadEvent) => {
       if (dirtyRef.current) e.preventDefault();
     };
+
+    timer = setTimeout(loop, delay);
+    window.addEventListener("pointerdown", bump);
+    window.addEventListener("keydown", bump);
     document.addEventListener("visibilitychange", vis);
     window.addEventListener("beforeunload", warn);
     return () => {
-      clearInterval(t);
+      stopped = true;
+      clearTimeout(timer);
       clearTimeout(timerRef.current);
       clearTimeout(maxTimerRef.current);
+      window.removeEventListener("pointerdown", bump);
+      window.removeEventListener("keydown", bump);
       document.removeEventListener("visibilitychange", vis);
       window.removeEventListener("beforeunload", warn);
     };

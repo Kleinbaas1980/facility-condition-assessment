@@ -6,7 +6,7 @@ import {
   type SyncInput,
 } from "../src/validation/project.js";
 import { professionFor } from "./assignment.model.js";
-import { ownedProject, audit } from "./project.model.js";
+import { ownedProject, audit, canAccess } from "./project.model.js";
 
 const DECIMALS: Record<string, number> = {
   extent: 4,
@@ -479,4 +479,14 @@ export async function changesSince(
     removed,
     ...(await structure(db, projectId, profession)),
   };
+}
+
+export async function headSeq(db: Db, projectId: string, userId: string) {
+  const r = await db.query(
+    `SELECT p.seq FROM projects p WHERE p.id=$1 AND p.deleted_at IS NULL AND ${canAccess("p", "$2")}`,
+    [projectId, userId],
+  );
+  if (!r.rows[0])
+    throw new HttpError(404, "Project not found.", "PROJECT_NOT_FOUND");
+  return Number(r.rows[0].seq);
 }

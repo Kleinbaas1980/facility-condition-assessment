@@ -123,9 +123,7 @@ textarea {
   font-weight: 750;
   min-height: 44px;
 }
-.btn:hover {
-  background: #066a6d;
-}
+
 .btn.ghost {
   background: #e7f0f2;
   color: #1b5661;
@@ -133,7 +131,11 @@ textarea {
 .btn.outline {
   background: transparent;
   border: 1px solid #bfd0d8;
-  color: #b8ced9;
+  color: #4e6465;
+}
+.btn:hover {
+  background: #066a6d;
+  color: white;
 }
 .actions {
   display: flex;

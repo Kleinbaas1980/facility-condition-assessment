@@ -7,6 +7,7 @@ import { HttpError } from "../src/utils/errors.js";
 import { z } from "zod";
 import * as syncModel from "../models/sync.model.js";
 import type { SyncInput } from "../src/validation/project.js";
+import { reverifyAuth } from "../middleware/auth.js";
 
 //.
 const id = (req: Request) => String(req.params.id);
@@ -41,12 +42,19 @@ export async function sync(req: Request, res: Response) {
     ),
   );
 }
+
 export async function changes(req: Request, res: Response) {
   const since = z.coerce
     .number()
     .int()
     .min(0)
     .parse(req.query.since ?? 0);
+  const head = await syncModel.headSeq(pool, id(req), req.auth!.userId); // live access check
+  if (head === since) {
+    res.json({ seq: since });
+    return;
+  } // the common case: 1 query
+  await reverifyAuth(req.auth!.userId, req.auth!.sessionId); // data is leaving: full check
   res.json(
     await syncModel.changesSince(pool, id(req), req.auth!.userId, since),
   );
