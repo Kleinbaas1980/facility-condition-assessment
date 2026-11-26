@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState, useRef } from "react";
+import RateLibrary from './qs-rate-library-page';
+import {rateLibraryApi} from '@/api/rate-library';
+import {componentTemplates,measurementPatch,templatePatch,measuredRate,type RateTemplate} from '@/lib/qs-rate-library';
 import QsPricing from "./qs-pricing";
 import WelcomePage from "@/components/welcome-page";
 import { catalog as bca } from "@/lib/catalog";
@@ -60,6 +63,12 @@ export default function AssessmentWorkspace() {
   const assignedProfession = !canSwitchRole ? user?.profession || "" : "";
   const [projects, setProjects] = useState<Summary[]>([]),
     [project, setProject] = useState<Project | null>(null);
+  const [platformRates,setPlatformRates]=useState<RateTemplate[]>([]);
+  const [showRateLibrary,setShowRateLibrary]=useState(false);
+  useEffect(()=>{if(!user)return;let active=true;
+    const refresh=()=>void rateLibraryApi.list().then(rates=>{if(active)setPlatformRates(rates)}).catch(()=>{if(active)setMessage('Could not load the platform rate library. Refresh to retry.')});
+    refresh();window.addEventListener('focus',refresh);return()=>{active=false;window.removeEventListener('focus',refresh)};
+  },[user?.id]);
   const [showWelcome, setShowWelcome] = useState(true);
   const [showQs, setShowQs] = useState(false),
     [showReport, setShowReport] = useState(false),
@@ -266,7 +275,8 @@ export default function AssessmentWorkspace() {
     (sum, row) => sum + (itemAmount(row) || 0),
     0,
   );
-  const catalog = [...bca.captures, ...all].filter(
+  const libraryComponents:Capture[]=componentTemplates([],platformRates).map(t=>({area:'',section:'',element:t.element,component:t.component,type:'',exists:'',extent:null,ratings:[0,0,0,0,0],comment:'',discipline:t.discipline}));
+  const catalog = [...bca.captures,...libraryComponents, ...all].filter(
     (row) => !assignedProfession || row.discipline === assignedProfession,
   );
   const catalogElements = [
@@ -488,13 +498,21 @@ export default function AssessmentWorkspace() {
     scheduleAutosave();
   }
 
+  function applyMeasuredRates(){
+    const rows=projectRef.current?.payload.captures||[];
+    let count=0;rows.forEach((row,index)=>{const rate=measuredRate(row,platformRates);if(rate){update(index,templatePatch(rate,row));count++}});
+    setMessage(count?`${count} measured items priced. Save pricing to store changes.`:'No matching unpriced measured items. Check work type, unit and quantity.');
+  }
   function update(index: number, patch: Partial<Capture>) {
+    if(!isAdmin&&!('costTemplateId' in patch)){
+      patch={...patch};delete patch.unitRate;delete patch.remedialCost;delete patch.costBuildUp;
+    }
     dirtyRef.current = true;
     mutate((p) => {
       const captures = [...p.payload.captures];
       const id = captures[index]?.id;
       if (id) rejectedRef.current.delete(id); // edited again, so try again
-      captures[index] = { ...captures[index], ...patch };
+      captures[index] = { ...captures[index], ...measurementPatch(captures[index],patch,platformRates) };
       return { ...p, payload: { ...p.payload, captures } };
     });
     setMessage("Unsaved changes");
@@ -1627,6 +1645,7 @@ export default function AssessmentWorkspace() {
         <p role="status">Loading your account…</p>
       </main>
     );
+  if(showRateLibrary&&isAdmin)return <div className="app"><RateLibrary saved={platformRates} legacy={[]} onChange={rates=>setPlatformRates(previous=>[...previous.filter(p=>!rates.some(r=>r.id===p.id)),...rates])} onBack={()=>setShowRateLibrary(false)}/></div>;
   if (showWelcome)
     return (
       <WelcomePage
@@ -2130,6 +2149,9 @@ export default function AssessmentWorkspace() {
           ) : showQs && isAdmin ? (
             <QsPricing
               project={project}
+              library={platformRates}
+              onOpenLibrary={()=>setShowRateLibrary(true)}
+              onApplyMeasuredRates={applyMeasuredRates}
               onUpdate={update}
               onPricingChange={(pricing) => {
                 dirtyRef.current = true;
@@ -2426,7 +2448,7 @@ export default function AssessmentWorkspace() {
                 Prices can be left blank during assessment and completed on the
                 QS pricing page.
               </p>
-              <WorkspaceSection
+              <WorkspaceSection platformRates={platformRates}
                 assignedProfession={assignedProfession}
                 setAddingArea={setAddingArea}
                 addingArea={addingArea}

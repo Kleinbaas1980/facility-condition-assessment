@@ -1,3 +1,4 @@
+import {rateLibraryRoutes} from '../routes/rate-library.routes.js';
 import { adminRoutes } from "../routes/admin.routes.js";
 import express from "express";
 import cors from "cors";
@@ -57,6 +58,7 @@ app.get("/api/ready", async (_req, res, next) => {
 app.use("/api", protectMutations);
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/rate-library",rateLibraryRoutes);
 app.use("/api/admin", adminRoutes);
 app.use((_req, res) =>
   res.status(404).json({ error: "Route not found.", code: "NOT_FOUND" }),

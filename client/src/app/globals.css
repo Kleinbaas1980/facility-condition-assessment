@@ -3050,3 +3050,6 @@ textarea {
 .top a {
   text-decoration: none;
 }
+
+/* QS component rate build-ups */
+.cost-basis{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;align-items:end}.cost-resource-table{min-width:1080px;width:100%;border-collapse:collapse}.cost-resource-table th{text-align:left;padding:12px;background:#4d4d4d;color:#fff}.cost-resource-table td{padding:8px;vertical-align:top;border-bottom:1px solid #e5e5e5}.cost-resource-table td:nth-child(2){min-width:230px}.cost-resource-table input,.cost-resource-table select{min-width:90px;font-size:14px}.cost-resource-table td:first-child{min-width:155px}.cost-panels{display:grid;grid-template-columns:1fr 1fr;gap:20px}.cost-panels label{margin:12px 0}.cost-total dl{margin:0 0 22px}.cost-total dl>div{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e4e4e4}.cost-total dd{margin:0;text-align:right;font-weight:700}.cost-grand{font-size:18px;color:#9c3b0a}.cost-total .btn{width:100%}@media(max-width:760px){.cost-panels,.cost-basis{grid-template-columns:1fr}.cost-resource-table{font-size:14px}}

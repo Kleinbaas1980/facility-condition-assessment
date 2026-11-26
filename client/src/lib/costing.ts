@@ -6,6 +6,6 @@ export function itemAmount(row:CostedCapture):number|null{
  return row.remedialCost!=null&&Number.isFinite(amount)&&amount>=0?amount:null;
 }
 export function allocation(areaCode:string|undefined):string{
- const match=(areaCode||"").match(/(?:^|-)B\d{2}[A-Z](?:-|$)/i);
+ const match=(areaCode||"").match(/(?:^|-)B\d{2}[0-9A-Z](?:-|$)/i);
  return match?match[0].replace(/-/g,"").toUpperCase():"Other / shared";
 }

@@ -1,3 +1,4 @@
+import type {CostBuildUp} from "@/lib/qs-cost-model";
 export type User = {
   profession?: string;
   role: "admin" | "assessor";
@@ -17,6 +18,8 @@ export type Area = {
   sqm: number | null;
 };
 export type Capture = {
+  costTemplateId?:string|null;
+  costBuildUp?:CostBuildUp|null;
   id?: string;
   area: string;
   section: string;

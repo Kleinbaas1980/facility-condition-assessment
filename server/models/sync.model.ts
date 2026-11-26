@@ -1,3 +1,6 @@
+import {sameBuildUp} from "../src/costing/qs-cost-model.js";
+import {assessorPricing} from '../src/costing/assessor-pricing.js';
+import {loadPlatformRates} from './rate-library.model.js';
 import { randomUUID } from "node:crypto";
 import type { Db } from "../configs/database.js";
 import { HttpError } from "../src/utils/errors.js";
@@ -27,6 +30,7 @@ const num = (f: string, v: unknown) =>
   Number(Number(v).toFixed(DECIMALS[f] ?? 10));
 // MUST behave exactly like same() in the client lib/sync.ts
 export function same(field: string, a: unknown, b: unknown) {
+  if(field==="costBuildUp")return sameBuildUp(a,b);
   if (field === "ratings") {
     const x = a as unknown[],
       y = b as unknown[];
@@ -53,6 +57,8 @@ const CAPTURE_COLUMNS: Record<string, string> = {
   extentUnit: "extent_unit",
   remedialQuantity: "remedial_quantity",
   unitRate: "unit_rate",
+  costTemplateId:"cost_template_id",
+  costBuildUp:"cost_build_up",
   remedialCost: "remedial_cost",
   priority: "priority",
   measuredScope: "measured_scope",
@@ -82,7 +88,7 @@ const PRICING = ["pg", "fees", "contingency", "vat"];
 
 const SELECT_CAPTURE = `SELECT c.id,a.name AS area,c.section,e.name AS element,c.component,
  c.component_type AS type,c.present AS exists,c.extent,c.extent_unit AS "extentUnit",
- c.remedial_quantity AS "remedialQuantity",c.unit_rate AS "unitRate",c.remedial_cost AS "remedialCost",
+ c.remedial_quantity AS "remedialQuantity",c.unit_rate AS "unitRate",c.cost_template_id AS "costTemplateId",c.cost_build_up AS "costBuildUp",c.remedial_cost AS "remedialCost",
  c.priority,c.measured_scope AS "measuredScope",c.work_type AS "workType",
  c.maintenance_work AS "maintenanceWork",c.ratings,c.comment,c.discipline
  FROM captures c JOIN elements e ON e.id=c.element_id JOIN functional_areas a ON a.id=e.area_id`;
@@ -189,6 +195,7 @@ export async function applySync(
   canAdmin: boolean,
 ) {
   await ownedProject(db, projectId, userId);
+  const rates=canAdmin?[]:await loadPlatformRates(db);
   const profession = await professionFor(db, userId); // "" = sees every profession
   // Lock the project row. All writers queue here, so seq order == commit order.
   const locked = (
@@ -295,7 +302,8 @@ export async function applySync(
     results.push(
       await guarded(op.id, async () => {
         if (op.kind === "create") {
-          const r = op.row;
+          const unpriced={...op.row,unitRate:null,remedialCost:null,costTemplateId:null,costBuildUp:null};
+          const r = canAdmin?op.row:{...unpriced,...assessorPricing(unpriced,op.row,rates)};
           if (profession && r.discipline !== profession)
             throw forbid("Only assigned profession findings may be captured.");
           if (
@@ -310,8 +318,8 @@ export async function applySync(
           const elId = await element(r.area, r.element);
           await db.query(
             `INSERT INTO captures(id,project_id,element_id,section,component,component_type,present,extent,extent_unit,
-            remedial_quantity,unit_rate,remedial_cost,priority,measured_scope,work_type,maintenance_work,ratings,comment,discipline,position,seq)
-           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+            remedial_quantity,unit_rate,remedial_cost,priority,measured_scope,work_type,maintenance_work,ratings,comment,discipline,position,seq,cost_template_id,cost_build_up)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb)`,
             [
               op.id,
               projectId,
@@ -334,6 +342,8 @@ export async function applySync(
               r.discipline,
               nextPos++,
               stamp(),
+              r.costTemplateId??null,
+              r.costBuildUp==null?null:JSON.stringify(r.costBuildUp),
             ],
           );
           return { id: op.id, status: "applied" };
@@ -348,10 +358,20 @@ export async function applySync(
         if (profession && cur.discipline !== profession)
           throw forbid("Only assigned profession findings may be captured.");
         clean([cur]);
+        // A rate and its measurement basis must merge atomically. Stale pricing
+        // edits cannot leave a new snapshot with someone else's quantity/unit.
+        const pricingGroup=new Set(['element','component','maintenanceWork','extentUnit','remedialQuantity','unitRate','remedialCost','costTemplateId','costBuildUp']);
+        if(Object.entries(op.changes).some(([field,ch])=>pricingGroup.has(field)&&!same(field,cur[field],ch.base)&&!same(field,cur[field],ch.value)))return {id:op.id,status:'conflict'};
+        let changes=op.changes;
+        if(!canAdmin){
+          const values=Object.fromEntries(Object.entries(changes).map(([field,ch])=>[field,ch.value]));
+          const safe=assessorPricing(cur,values,rates);
+          changes=Object.fromEntries(Object.entries(safe).map(([field,value])=>[field,{base:op.changes[field]?.base??cur[field],value:value===undefined?null:value}]));
+        }
         const sets: string[] = [],
           vals: unknown[] = [];
         let conflicted = false;
-        for (const [field, ch] of Object.entries(op.changes)) {
+        for (const [field, ch] of Object.entries(changes)) {
           if (field !== "element" && !CAPTURE_COLUMNS[field])
             throw new HttpError(400, `Unknown field ${field}.`);
           const parsed = (captureSchema.shape as any)[field].safeParse(
