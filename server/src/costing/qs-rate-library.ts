@@ -39,11 +39,14 @@ export function componentTemplates(captures:CostItem[],saved:RateTemplate[]=[]):
 export const readyTemplate=(t:RateTemplate)=>!!t.unit.trim()&&calculateBuildUp(t.build).complete;
 export function matchingTemplates(row:CostItem,saved:RateTemplate[]){
  const overrides=saved.filter(t=>componentKey(t)===componentKey(row));
- return workOptions.map(work=>overrides.find(t=>t.work===work)||defaultTemplate(row,work)).filter(readyTemplate);
+ return workOptions.map(work=>overrides.find(t=>t.work===work)||defaultTemplate(row,work))
+  .filter(t=>readyTemplate(t)&&(!row.extentUnit?.trim()||sameUnit(t.unit,row.extentUnit)));
 }
 export function templatePatch(t:RateTemplate,row?:CostItem):Partial<CostItem>{
- const differentUnit=row?.extentUnit&&!sameUnit(t.unit,row.extentUnit);
- return {costTemplateId:t.id,costBuildUp:structuredClone(t.build),unitRate:calculateBuildUp(t.build).rate,extentUnit:t.unit,maintenanceWork:t.work,remedialCost:null,...(differentUnit?{remedialQuantity:null}:{})};
+ // A rate belongs to its library unit. Never rewrite a selected measurement
+ // unit (or apply its quantity) to fit an incompatible library rate.
+ if(row?.extentUnit?.trim()&&!sameUnit(t.unit,row.extentUnit))return {};
+ return {costTemplateId:t.id,costBuildUp:structuredClone(t.build),unitRate:calculateBuildUp(t.build).rate,extentUnit:t.unit,maintenanceWork:t.work,remedialCost:null};
 }
 export function measuredRate(row:CostItem,saved:RateTemplate[]){
  const {remedialQuantity,extentUnit,maintenanceWork}=row;
@@ -57,7 +60,14 @@ export function measurementPatch(row:CostItem,patch:Partial<CostItem>,saved:Rate
  if(!('remedialQuantity' in patch||'extentUnit' in patch||'maintenanceWork' in patch||'component' in patch||'element' in patch))return patch;
  const next={...row,...patch};
  if(row.costTemplateId){
-  if('component' in patch||'element' in patch||('maintenanceWork' in patch&&patch.maintenanceWork!==row.maintenanceWork)||('extentUnit' in patch&&patch.extentUnit!==row.extentUnit))return {...patch,costTemplateId:undefined,costBuildUp:undefined,unitRate:null,remedialCost:null};
+  const unitChanged='extentUnit' in patch&&!sameUnit(patch.extentUnit||'',row.extentUnit||'');
+  const scopeChanged=('component' in patch&&patch.component!==row.component)||('element' in patch&&patch.element!==row.element)||('maintenanceWork' in patch&&patch.maintenanceWork!==row.maintenanceWork);
+  if(unitChanged||scopeChanged){
+   const reset={...patch,costTemplateId:undefined,costBuildUp:undefined,unitRate:null,remedialCost:null,...(unitChanged?{remedialQuantity:null}:{})};
+   const unpriced={...next,...reset};
+   const rate=measuredRate(unpriced,saved);
+   return rate?{...reset,...templatePatch(rate,unpriced),extentUnit:unpriced.extentUnit}:reset;
+  }
   return {...patch,remedialCost:null};
  }
  const rate=measuredRate(next,saved);

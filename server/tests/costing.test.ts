@@ -24,7 +24,7 @@ test('rate snapshots survive library edits and clear on incompatible unit change
  const priced={...row,...templatePatch(rate,row)};const previous=priced.unitRate;
  rate.build.resources[0].rate=99999;assert.equal(priced.unitRate,previous);assert.notEqual(calculateBuildUp(rate.build).rate,calculateBuildUp(priced.costBuildUp!).rate);
  assert.equal(measurementPatch(priced,{extentUnit:'m²'},[]).unitRate,null);
- assert.equal(templatePatch(rate,{...row,extentUnit:'m²'}).remedialQuantity,null);
+ assert.deepEqual(templatePatch(rate,{...row,extentUnit:'m²'}),{});
 });
 test('assessors cannot set a manual rate or inject resource prices',()=>{
  assert.throws(()=>assessorPricing(row,{unitRate:1},[]),/Only the QS/);
@@ -54,4 +54,27 @@ test('JSONB key ordering does not create false autosave conflicts',()=>{
  const a={resources:[{id:'r',rate:40,quantity:2}],overheadPercent:10};
  const b={overheadPercent:10,resources:[{quantity:2,rate:40,id:'r'}]};
  assert(sameBuildUp(a,b));assert(!sameBuildUp(a,{...b,overheadPercent:20}));assert(sameBuildUp(null,undefined));
+});
+
+test('chosen extent unit filters incompatible square-metre rates and keeps the library override',()=>{
+ const component={discipline:'Architect',element:'External facade',component:'Finishes'};
+ const override=matchingTemplates(component,[]).find(t=>t.work==='Repair')!;override.unit='LM';
+ const selected={...component,extentUnit:'LM',maintenanceWork:'Repair',remedialQuantity:10};
+ const rates=matchingTemplates(selected,[override]);
+ assert.equal(rates.length,1);assert.equal(rates[0].unit,'LM');assert.equal(rates[0].work,'Repair');
+ assert.equal(measurementPatch({...selected,extentUnit:''},{extentUnit:'LM'},[override]).extentUnit,'LM');
+ assert.equal(measurementPatch({...selected,extentUnit:''},{extentUnit:'LM'},[override]).costTemplateId,override.id);
+ assert(!matchingTemplates({...component,extentUnit:'No.'},[override]).length);
+ const sqm=matchingTemplates(component,[]).find(t=>t.work==='Replacement')!;
+ assert.deepEqual(templatePatch(sqm,selected),{});
+ assert.throws(()=>assessorPricing(selected,{costTemplateId:sqm.id},[override]),/valid rate/);
+});
+test('equivalent measurement units retain pricing, but dimension changes require a new quantity',()=>{
+ const component={discipline:'Civil Engineer',element:'External works',component:'Kerbs and channels'};
+ const t=matchingTemplates(component,[]).find(t=>t.work==='Repair')!;
+ const priced={...component,...templatePatch(t),remedialQuantity:12};
+ const equivalent=measurementPatch(priced,{extentUnit:'m'},[]);
+ assert.equal(equivalent.costTemplateId,undefined);assert(!('unitRate' in equivalent));assert(!('remedialQuantity' in equivalent));
+ const changed=measurementPatch(priced,{extentUnit:'m²'},[]);
+ assert.equal(changed.extentUnit,'m²');assert.equal(changed.unitRate,null);assert.equal(changed.remedialQuantity,null);
 });

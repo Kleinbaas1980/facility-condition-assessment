@@ -749,7 +749,7 @@ export default function WorkspaceSection({
                           })
                         }
                       >
-                        <option value="">Select unit</option>
+                        <option value="">Select unit</option>{row.extentUnit&&!["m","No.","LM","m²","m³","kg","sum"].includes(row.extentUnit)&&<option value={row.extentUnit}>{row.extentUnit}</option>}
                         <option value="m">Metre (m)</option>
                         <option value="No.">Number (No.)</option>
                         <option value="LM">Linear metre (LM)</option>
@@ -823,7 +823,7 @@ export default function WorkspaceSection({
                       />
                     </label>
                   </div>
-                  <label>Built-in component rate<select value={row.costTemplateId||""} onChange={e=>{const rate=matchingTemplates(row,platformRates).find(t=>t.id===e.target.value);if(rate)update(row.index,templatePatch(rate,row));}}><option value="">Choose work breakdown, then enter quantity</option>{matchingTemplates(row,platformRates).map(t=><option key={t.id} value={t.id}>{t.work} · {t.build.reference.startsWith('Indicative 1C')?'Indicative · ':''}{t.unit}</option>)}</select></label>
+                  <label>Built-in component rate<select value={matchingTemplates(row,platformRates).some(t=>t.id===row.costTemplateId)?row.costTemplateId||"":""} onChange={e=>{const rate=matchingTemplates(row,platformRates).find(t=>t.id===e.target.value);if(rate)update(row.index,templatePatch(rate,row));}}><option value="">{matchingTemplates(row,platformRates).length?"Choose a rate for the selected unit":"No library rate for this unit"}</option>{matchingTemplates(row,platformRates).map(t=><option key={t.id} value={t.id}>{t.work} · {t.build.reference.startsWith('Indicative 1C')?'Indicative · ':''}{t.unit}</option>)}</select></label>
                   <div className="details">
                     <label>
                       Priority
