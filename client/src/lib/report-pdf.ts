@@ -1,3 +1,4 @@
+import {maintenanceRowTheme} from './maintenance-plan-theme';
 import {maintenancePlan,planNotes} from './maintenance-plan';
 import axios from "axios";
 import { uploadsApi } from "@/api/uploads";
@@ -70,8 +71,10 @@ export async function createReportPdf(project:Project):Promise<File>{
   const wrapped=cells.map((cell,i)=>{pdf.setFontSize(8);return pdf.splitTextToSize(cell,columns[i]-4) as string[]});
   const height=Math.max(...wrapped.map(lines=>lines.length))*4+5;
   pageIf(height);
-  pdf.setFillColor(...(header?[77,77,77]:strong?[255,237,224]:[255,255,255]) as [number,number,number]);pdf.rect(18,y,174,height,'F');
-  pdf.setTextColor(...(header?[255,255,255]:[55,55,55]) as [number,number,number]);pdf.setFont('helvetica',header||strong?'bold':'normal');pdf.setFontSize(8);
+  const tone=maintenanceRowTheme(cells[0],strong);
+  pdf.setFillColor(...(header?[61,65,69]:tone.fill) as [number,number,number]);pdf.rect(18,y,174,height,'F');
+  if(!header){pdf.setFillColor(...tone.accent);pdf.rect(18,y,1,height,'F')}
+  pdf.setTextColor(...(header?[255,255,255]:tone.ink) as [number,number,number]);pdf.setFont('helvetica',header||strong?'bold':'normal');pdf.setFontSize(8);
   let x=18;wrapped.forEach((lines,i)=>{pdf.text(lines,i===0?x+2:x+columns[i]-2,y+5,{align:i===0?'left':'right'});x+=columns[i]});
   pdf.setDrawColor(220,220,220);pdf.setLineWidth(.2);pdf.line(18,y+height,192,y+height);y+=height;pdf.setTextColor(77,77,77);
  }

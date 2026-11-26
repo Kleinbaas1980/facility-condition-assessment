@@ -3055,3 +3055,16 @@ textarea {
 .cost-basis{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;align-items:end}.cost-resource-table{min-width:1080px;width:100%;border-collapse:collapse}.cost-resource-table th{text-align:left;padding:12px;background:#4d4d4d;color:#fff}.cost-resource-table td{padding:8px;vertical-align:top;border-bottom:1px solid #e5e5e5}.cost-resource-table td:nth-child(2){min-width:230px}.cost-resource-table input,.cost-resource-table select{min-width:90px;font-size:14px}.cost-resource-table td:first-child{min-width:155px}.cost-panels{display:grid;grid-template-columns:1fr 1fr;gap:20px}.cost-panels label{margin:12px 0}.cost-total dl{margin:0 0 22px}.cost-total dl>div{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #e4e4e4}.cost-total dd{margin:0;text-align:right;font-weight:700}.cost-grand{font-size:18px;color:#9c3b0a}.cost-total .btn{width:100%}@media(max-width:760px){.cost-panels,.cost-basis{grid-template-columns:1fr}.cost-resource-table{font-size:14px}}
 
 .maintenance-plan table{min-width:780px}.maintenance-plan td:not(:first-child),.maintenance-plan th:not(:first-child){text-align:right;white-space:nowrap}.maintenance-plan-notes{padding-left:20px;font-size:14px;line-height:1.5}.maintenance-plan-notes li{margin:7px 0}@media print{.maintenance-plan{break-before:page;break-inside:avoid}.maintenance-plan table{min-width:0;width:100%;font-size:9px}.maintenance-plan th,.maintenance-plan td{padding:6px 4px}.maintenance-plan-notes{font-size:10px}}
+
+/* Maintenance budget categories retain their colours in print and PDF. */
+.maintenance-plan thead th{background:#3d4145;color:#fff;border-bottom:3px solid #f26722}
+.maintenance-plan .plan-opex td{background:#e8f6ef;color:#15553c}
+.maintenance-plan .plan-capex td{background:#e8f0fc;color:#1e4375}
+.maintenance-plan .plan-review td{background:#fff5db;color:#6f4c0c}
+.maintenance-plan .plan-subtotal td{background:#e6eaee;color:#2d3741;font-weight:750}
+.maintenance-plan .plan-allowance td{background:#f8f9fb;color:#424b54}
+.maintenance-plan .plan-grand td{background:#b5450e;color:#fff;font-weight:800;border-top:2px solid #f26722;border-bottom:0}
+.maintenance-plan tbody tr td:first-child{font-weight:700;border-left:4px solid transparent}
+.maintenance-plan .plan-opex td:first-child{border-left-color:#1e8258}.maintenance-plan .plan-capex td:first-child{border-left-color:#3068b4}.maintenance-plan .plan-review td:first-child{border-left-color:#cb9116}.maintenance-plan .plan-grand td:first-child{border-left-color:#f26722}
+.maintenance-plan tbody td:nth-child(5){font-weight:800;border-left:1px solid #9aa6b533}
+@media print{.maintenance-plan table,.maintenance-plan th,.maintenance-plan td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
