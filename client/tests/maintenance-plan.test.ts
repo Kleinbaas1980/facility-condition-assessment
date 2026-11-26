@@ -35,3 +35,21 @@ test('P4 phasing occurs once across years three and four, with no lost cents',()
  assert.deepEqual(p.rows[1].years,[0,0,572.45,612.52]);assert.equal(p.rows[1].total,1184.97);assert.equal(p.rows[1].unscheduled,75);
  const tiny=maintenancePlan([row('Repair','P4',0.01)]);assert.equal(tiny.rows[0].total,0.01);
 });
+
+test('itemised breakdown reconciles each category, year and unscheduled amount',()=>{
+ const items=[row('Repair','P3',0.05),row('Repair','P3',0.05),row('Repair','P3',0.05),row('Replacement','P4',103.17),row('Repair','',99),row('Refurbishment','P2',42),row('Repair','P1',null)];
+ const plan=maintenancePlan(items,{pg:8,fees:10,contingency:10,vat:15});
+ assert.equal(plan.details.length,items.length);
+ for(const category of plan.rows.slice(0,3)){
+  const entries=plan.details.filter(d=>d.category===category.label);
+  for(let year=0;year<4;year++)assert.equal(Math.round(entries.reduce((sum,d)=>sum+d.years[year],0)*100),Math.round(category.years[year]*100));
+  assert.equal(Math.round(entries.reduce((sum,d)=>sum+d.total,0)*100),Math.round(category.total*100));
+  assert.equal(Math.round(entries.reduce((sum,d)=>sum+d.unscheduled,0)*100),Math.round(category.unscheduled*100));
+ }
+ assert.equal(plan.details[6].baseAmount,null);assert.equal(plan.details[6].total,0);
+});
+test('breakdown preserves measurement basis, work scope and classification source',()=>{
+ const item={...row('Replacement','P4',999),area:'Building 1',element:'Doors',component:'Door set',measuredScope:'Replace damaged door',remedialQuantity:2,unitRate:150};
+ const detail=maintenancePlan([item]).details[0];
+ assert.equal(detail.baseAmount,300);assert.equal(detail.reason,'Replacement');assert.equal(detail.category,'Capex');assert.equal(detail.item.measuredScope,'Replace damaged door');assert.deepEqual(detail.baseYears,[0,0,150,150]);
+});

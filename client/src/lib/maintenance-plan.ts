@@ -1,7 +1,8 @@
 import {itemAmount,type CostedCapture} from './costing';
-export type MaintenanceItem=CostedCapture&{workType?:string;maintenanceWork?:string;priority?:string};
+export type MaintenanceItem=CostedCapture&{id?:string;area?:string;element?:string;component?:string;discipline?:string;measuredScope?:string;comment?:string;extentUnit?:string;workType?:string;maintenanceWork?:string;priority?:string};
 export type PlanPricing={pg:number;fees:number;contingency:number;vat:number};
 export type PlanLine={label:string;years:number[];total:number;unscheduled:number;strong?:boolean};
+export type PlanDetail={index:number;item:MaintenanceItem;category:ReturnType<typeof budgetCategory>;baseAmount:number|null;baseYears:number[];years:number[];total:number;unscheduled:number;reason:string};
 export const escalationFactors=[1,1.07,1.07**2,1.07**3];
 export const planNotes=[
  'Year 1 covers months 0–12 at current prices; Year 2 covers months 12–24 at +7%; Year 3 covers months 24–36 at +14.49%; Year 4 covers months 36–48 at +22.50%. Escalation compounds at 7% annually.',
@@ -35,6 +36,30 @@ export function maintenancePlan(items:MaintenanceItem[],pricing:Partial<PlanPric
   const years=values.slice(0,4).map((v,i)=>round(v*escalationFactors[i]));
   return {label,years,total:round(years.reduce((s,v)=>s+v,0)),unscheduled:round(values[4])};
  });
+ // Reconcile item allocations to the category totals, including cent rounding.
+ const details:PlanDetail[]=items.map((item,index)=>{
+  const baseAmount=itemAmount(item),baseYears=[0,0,0,0],priority=normal(item.priority);
+  let unscheduled=0;
+  if(baseAmount!==null){
+   if(priority==='p1'||priority==='p2')baseYears[0]=baseAmount;
+   else if(priority==='p3')baseYears[1]=baseAmount;
+   else if(priority==='p4'){baseYears[2]=round(baseAmount/2);baseYears[3]=round(baseAmount-baseYears[2]);}
+   else unscheduled=baseAmount;
+  }
+  const category=budgetCategory(item);
+  const reason=normal(item.workType)==='upgrade'?'Upgrade work':normal(item.workType)==='compliance'?'Compliance scope — QS classification required':item.maintenanceWork?.trim()||'Work not classified';
+  return {index,item,category,baseAmount,baseYears,years:[0,0,0,0],total:0,unscheduled,reason};
+ });
+ for(const category of rows){
+  const entries=details.filter(d=>d.category===category.label&&d.baseAmount!==null);
+  for(let year=0;year<4;year++){
+   const allocations=entries.map(detail=>{const raw=detail.baseYears[year]*escalationFactors[year]*100;const cents=Math.floor(raw+1e-8);return {detail,cents,remainder:raw-cents};});
+   let remaining=Math.round(category.years[year]*100)-allocations.reduce((sum,a)=>sum+a.cents,0);
+   allocations.sort((a,b)=>b.remainder-a.remainder||a.detail.index-b.detail.index);
+   for(const allocation of allocations){if(remaining>0){allocation.cents++;remaining--;}allocation.detail.years[year]=allocation.cents/100;}
+  }
+ }
+ for(const detail of details)detail.total=round(detail.years.reduce((sum,value)=>sum+value,0));
  const direct=[0,1,2,3,4].map(i=>round(rows.reduce((s,r)=>s+(i===4?r.unscheduled:r.years[i]),0)));
  const pct=(key:keyof PlanPricing)=>{const n=pricing[key];return typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=100?n:0};
  const allowances=direct.map(n=>round(n*pct('pg')/100)+round(n*pct('fees')/100)+round(n*pct('contingency')/100));
@@ -43,5 +68,5 @@ export function maintenancePlan(items:MaintenanceItem[],pricing:Partial<PlanPric
  for(const [label,values,strong] of [['Total direct works',direct,true],['P&G + fees + contingency',allowances,false],[`VAT (${pct('vat')}%)`,vat,false],['Total maintenance budget',total,true]] as const){
   rows.push({label,years:values.slice(0,4),total:round(values.slice(0,4).reduce((s,v)=>s+v,0)),unscheduled:values[4],strong});
  }
- return {rows,unpriced,unscheduledItems,reviewItems};
+ return {rows,details,unpriced,unscheduledItems,reviewItems};
 }

@@ -66,12 +66,12 @@ export async function createReportPdf(project:Project):Promise<File>{
  line("7% annual compounded escalation. Year 1 is the current-price base. All table amounts in ZAR (R).",9);
  const plan=maintenancePlan(rows,rates);
  const columns=[36,22,22,22,22,25,25];
- function planTableRow(cells:string[],header=false,strong=false){
+ function planTableRow(cells:string[],header=false,strong=false,toneLabel=cells[0]){
   pdf.setFont('helvetica',header||strong?'bold':'normal');
   const wrapped=cells.map((cell,i)=>{pdf.setFontSize(7.3);return pdf.splitTextToSize(cell,columns[i]-4) as string[]});
   const height=Math.max(...wrapped.map(lines=>lines.length))*4+5;
   pageIf(height);
-  const tone=maintenanceRowTheme(cells[0],strong);
+  const tone=maintenanceRowTheme(toneLabel,strong);
   pdf.setFillColor(...(header?[61,65,69]:tone.fill) as [number,number,number]);pdf.rect(18,y,174,height,'F');
   if(!header){pdf.setFillColor(...tone.accent);pdf.rect(18,y,1,height,'F')}
   pdf.setTextColor(...(header?[255,255,255]:tone.ink) as [number,number,number]);pdf.setFont('helvetica',header||strong?'bold':'normal');pdf.setFontSize(7.3);
@@ -84,6 +84,32 @@ export async function createReportPdf(project:Project):Promise<File>{
  y+=5;line(`${plan.unpriced} unpriced item(s) excluded; ${plan.reviewItems} need classification; ${plan.unscheduledItems} need a priority/year. Unscheduled amounts are outside the four-year total.`,9);
  planNotes.forEach(note=>line(note,8));
  line('Opex/Capex rows exclude allowances and VAT. Allowances are added to direct works; VAT applies after allowances.',8);
+
+ addReportPage();page++;y=18;
+ line('Maintenance work breakdown: Opex & Capex',17,true);
+ line('Component allocations reconcile to the category totals in the four-year plan. All table amounts in ZAR (R), before project allowances and VAT.',9);
+ for(const category of plan.rows.slice(0,3)){
+  pageIf(90);
+  heading(`${category.label}: included work`);
+  const entries=plan.details.filter(d=>d.category===category.label);
+  if(!entries.length){line('No captured items in this category.',9);continue;}
+  for(const detail of entries){
+   const item=detail.item;pageIf(66);
+   line(`#${detail.index+1}. ${item.area||'Area not entered'} / ${item.element||'Element not entered'} / ${item.component||'Component not entered'}`,10,true);
+   line(`${item.discipline||project.discipline||'Profession not set'} | ${detail.reason} | ${item.priority||'No priority'}`,9);
+   line(item.remedialQuantity!=null&&item.unitRate!=null?`Quantity ${item.remedialQuantity} ${item.extentUnit||''} x rate ${money(item.unitRate)} per unit`:'Manual remedial cost / awaiting QS pricing',8);
+   const scope=item.measuredScope||item.comment;
+   if(scope)line(`Scope: ${scope.length>280?scope.slice(0,280)+'... (full scope in BOQ)':scope}`,8);
+   planTableRow(['Base cost','Year 1','Year 2','Year 3','Year 4','4-year total','Unscheduled'],true);
+   planTableRow(detail.baseAmount===null?['Unpriced','—','—','—','—','—','—']:[planMoney(detail.baseAmount),...detail.years.map(planMoney),planMoney(detail.total),planMoney(detail.unscheduled)],false,false,category.label);
+   y+=5;
+  }
+  pageIf(38);line(`${category.label} base-cost subtotal: ${money(entries.reduce((sum,d)=>sum+(d.baseAmount||0),0))}`,9,true);
+  planTableRow(['Category subtotal','Year 1','Year 2','Year 3','Year 4','4-year total','Unscheduled'],true);
+  planTableRow([category.label,...category.years.map(planMoney),planMoney(category.total),planMoney(category.unscheduled)],false,true,category.label);
+ }
+ line('Unpriced items are shown but excluded from amounts. Cent rounding is balanced across components to match each category total. Project allowances and VAT are added only in the maintenance summary.',8);
+ addReportPage();page++;y=18;
  heading("Direct works by block / allocation");[...new Set(priced.map(r=>allocation(code.get(r.area))))].forEach(block=>line(`${block}: ${money(priced.filter(r=>allocation(code.get(r.area))===block).reduce((s,r)=>s+(itemAmount(r)||0),0))}`,10));
  heading("Captured items and bill of quantities");rows.forEach((r,i)=>{pageIf(27);line(`${i+1}. ${allocation(code.get(r.area))} / ${r.area} / ${r.element} / ${r.component}`,10,true);line(`${r.type||"Component type not set"}  |  ${r.discipline||project.discipline||"Profession not set"}`,9);line(`${r.measuredScope||r.comment||r.component}  |  Qty ${r.remedialQuantity??"—"} ${r.extentUnit||""}  |  Rate ${r.unitRate==null?"—":money(r.unitRate)}  |  Amount ${itemAmount(r)==null?"For QS review":money(itemAmount(r)!)}`,9);line(`${r.priority||"No priority"}  |  ${r.workType||"Type not set"}${r.workType!=="Compliance"&&r.maintenanceWork?` / ${r.maintenanceWork}`:""}  |  ${valid(r)?`C${r.ratings.indexOf(Math.max(...r.ratings))+1}`:"Unrated"}  |  ${r.photos?.length||0} photo(s)`,9);y+=2});
  heading("Assessor sign-off");if(project.assessorSignatureName){pageIf(31);await addReportImage("assessor-signature",18,y,65,24);y+=29}line(`Assessor: ${project.assessorName||"Not entered"}`,10);if(project.assessorRole)line(`Professional role: ${project.assessorRole}`,9);if(project.assessorRegistration)line(`Registration: ${project.assessorRegistration}`,9);
