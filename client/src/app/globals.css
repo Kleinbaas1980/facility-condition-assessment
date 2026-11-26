@@ -3073,3 +3073,15 @@ textarea {
 @media print{.maintenance-plan{break-inside:auto}.maintenance-breakdown{break-before:page}.maintenance-category h4{break-after:avoid}.maintenance-plan .maintenance-detail-table{min-width:0;font-size:8px;table-layout:fixed}.maintenance-plan .maintenance-item-context{min-width:0;width:30%;max-width:none}.maintenance-item-context small{font-size:8px}.maintenance-plan .maintenance-detail-table td:not(:first-child){white-space:normal;overflow-wrap:anywhere}.maintenance-plan .maintenance-detail-table tr{break-inside:avoid}}
 
 @media print{.maintenance-plan .maintenance-detail-table th:first-child{width:30%}}
+
+@page maintenance-landscape{size:A4 landscape;margin:12mm}
+@media print{
+ .maintenance-plan{page:maintenance-landscape;break-before:page;break-after:page;width:auto;max-width:none}
+ .maintenance-plan .table-scroll{overflow:visible}
+ .maintenance-plan table{min-width:0;width:100%;font-size:11px}
+ .maintenance-plan .maintenance-detail-table{min-width:0;font-size:10px;table-layout:fixed}
+ .maintenance-plan .maintenance-detail-table th:first-child{width:31%}
+ .maintenance-plan .maintenance-item-context{width:31%;min-width:0}
+ .maintenance-plan .maintenance-item-context small{font-size:10px}
+ .maintenance-plan-notes{font-size:10px}
+}

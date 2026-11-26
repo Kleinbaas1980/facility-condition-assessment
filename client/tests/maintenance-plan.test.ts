@@ -4,7 +4,7 @@ import {maintenancePlan,budgetCategory,escalationFactors} from '../src/lib/maint
 const row=(maintenanceWork:string,priority:string,remedialCost:number|null)=>({maintenanceWork,priority,remedialCost});
 test('7 percent compounds annually with current prices in year one',()=>{
  const p=maintenancePlan([row('Repair','P1',100),row('Repair','P3',100),row('Repair','P4',100)]);
- assert.deepEqual(p.rows[0].years,[100,107,57.25,61.25]);assert.equal(p.rows[0].total,325.5);
+ assert.deepEqual(p.rows[0].years,[100,107,114.49,0]);assert.equal(p.rows[0].total,321.49);
  assert.equal(escalationFactors[2],1.1449);assert.equal(Number(escalationFactors[3].toFixed(6)),1.225043);
 });
 test('Opex and Capex follow captured scope, ambiguity remains visible',()=>{
@@ -30,9 +30,9 @@ test('each item occurs once and quantity times rate takes precedence',()=>{
  assert.deepEqual(p.rows[0].years,[100,0,0,0]);assert.equal(p.rows[0].total,100);
 });
 
-test('P4 phasing occurs once across years three and four, with no lost cents',()=>{
+test('P4 is fully allocated to the 24–36 month year with no deferral',()=>{
  const p=maintenancePlan([row('Replacement','P4',1000),row('Replacement','',75)]);
- assert.deepEqual(p.rows[1].years,[0,0,572.45,612.52]);assert.equal(p.rows[1].total,1184.97);assert.equal(p.rows[1].unscheduled,75);
+ assert.deepEqual(p.rows[1].years,[0,0,1144.9,0]);assert.equal(p.rows[1].total,1144.9);assert.equal(p.rows[1].unscheduled,75);
  const tiny=maintenancePlan([row('Repair','P4',0.01)]);assert.equal(tiny.rows[0].total,0.01);
 });
 
@@ -51,5 +51,5 @@ test('itemised breakdown reconciles each category, year and unscheduled amount',
 test('breakdown preserves measurement basis, work scope and classification source',()=>{
  const item={...row('Replacement','P4',999),area:'Building 1',element:'Doors',component:'Door set',measuredScope:'Replace damaged door',remedialQuantity:2,unitRate:150};
  const detail=maintenancePlan([item]).details[0];
- assert.equal(detail.baseAmount,300);assert.equal(detail.reason,'Replacement');assert.equal(detail.category,'Capex');assert.equal(detail.item.measuredScope,'Replace damaged door');assert.deepEqual(detail.baseYears,[0,0,150,150]);
+ assert.equal(detail.baseAmount,300);assert.equal(detail.reason,'Replacement');assert.equal(detail.category,'Capex');assert.equal(detail.item.measuredScope,'Replace damaged door');assert.deepEqual(detail.baseYears,[0,0,300,0]);
 });

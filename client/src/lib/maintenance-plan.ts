@@ -6,7 +6,7 @@ export type PlanDetail={index:number;item:MaintenanceItem;category:ReturnType<ty
 export const escalationFactors=[1,1.07,1.07**2,1.07**3];
 export const planNotes=[
  'Year 1 covers months 0–12 at current prices; Year 2 covers months 12–24 at +7%; Year 3 covers months 24–36 at +14.49%; Year 4 covers months 36–48 at +22.50%. Escalation compounds at 7% annually.',
- 'P1/P2: Year 1. P3: Year 2. P4: provisional 50/50 budget split between Years 3 and 4. A four-year plan ends at month 48; work due in months 49–60 needs a Year 5 extension and programme review. Items with no recognised priority remain unscheduled at current prices.',
+ 'P1/P2: Year 1. P3: Year 2. P4: Year 3 (24–36 months). Year 4 is retained as a forward-planning column; captured P4 work is not deferred beyond month 36. Items with no recognised priority remain unscheduled at current prices.',
  'Planning classification: repair, routine maintenance and preventative maintenance are Opex; replacement and Upgrade work are Capex. Refurbishment, compliance-only and unclear scope require QS/client classification.',
  'Each captured work item is budgeted once. Recurring annual services and uncaptured future work are not assumed. QS review is required before adopting the plan.'
 ];
@@ -28,9 +28,7 @@ export function maintenancePlan(items:MaintenanceItem[],pricing:Partial<PlanPric
   const priority=normal(item.priority),year=priority==='p1'||priority==='p2'?0:priority==='p3'?1:priority==='p4'?2:4;
   if(year===4)unscheduledItems++;
   if(amount===null){unpriced++;continue;}
-  if(priority==='p4'){
-   const first=round(amount/2);buckets.get(category)![2]+=first;buckets.get(category)![3]+=round(amount-first);
-  }else buckets.get(category)![year]+=amount;
+  buckets.get(category)![year]+=amount;
  }
  const rows:PlanLine[]=[...buckets].map(([label,values])=>{
   const years=values.slice(0,4).map((v,i)=>round(v*escalationFactors[i]));
@@ -43,7 +41,7 @@ export function maintenancePlan(items:MaintenanceItem[],pricing:Partial<PlanPric
   if(baseAmount!==null){
    if(priority==='p1'||priority==='p2')baseYears[0]=baseAmount;
    else if(priority==='p3')baseYears[1]=baseAmount;
-   else if(priority==='p4'){baseYears[2]=round(baseAmount/2);baseYears[3]=round(baseAmount-baseYears[2]);}
+   else if(priority==='p4')baseYears[2]=baseAmount;
    else unscheduled=baseAmount;
   }
   const category=budgetCategory(item);

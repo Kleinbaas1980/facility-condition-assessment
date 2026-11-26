@@ -26,10 +26,17 @@ export async function createReportPdf(project:Project):Promise<File>{
  const pg=direct*rates.pg/100,fees=direct*rates.fees/100,contingency=direct*rates.contingency/100,vat=(direct+pg+fees+contingency)*rates.vat/100;
  const code=new Map(project.payload.areas.map(a=>[a.name,a.code]));
  let y=18,page=1;
- function addReportPage(){pdf.addPage();pdf.setFillColor(250,252,253);pdf.rect(0,0,210,297,"F");pdf.setFillColor(231,247,246);pdf.path([{op:"m",c:[180,0]},{op:"l",c:[210,0]},{op:"l",c:[210,28]},{op:"h",c:[]}]);pdf.fill();pdf.setFillColor(229,236,240);pdf.path([{op:"m",c:[0,272]},{op:"l",c:[25,297]},{op:"l",c:[0,297]},{op:"h",c:[]}]);pdf.fill();pdf.setDrawColor(86,207,202);pdf.setLineWidth(1);pdf.line(181,2,208,28);pdf.line(2,272,25,295);pdf.setTextColor(19,47,70);}
- function pageIf(height=8){if(y+height>275){addReportPage();page++;y=18}}
- function line(text:string,size=10,bold=false){pdf.setFont("helvetica",bold?"bold":"normal");pdf.setFontSize(size);const parts=pdf.splitTextToSize(text||" ",174) as string[];pageIf(parts.length*size*.48+3);pdf.text(parts,18,y);y+=parts.length*size*.48+3}
- function heading(text:string){pageIf(18);y+=5;pdf.setDrawColor(21,60,83);pdf.line(18,y,192,y);y+=7;line(text,14,true)}
+ let orientation:'portrait'|'landscape'='portrait';
+ function addReportPage(next:'portrait'|'landscape'=orientation){
+  orientation=next;pdf.addPage('a4',next);const w=pdf.internal.pageSize.getWidth(),h=pdf.internal.pageSize.getHeight();
+  pdf.setFillColor(250,250,250);pdf.rect(0,0,w,h,'F');
+  pdf.setFillColor(255,243,235);pdf.path([{op:'m',c:[w-30,0]},{op:'l',c:[w,0]},{op:'l',c:[w,28]},{op:'h',c:[]}]);pdf.fill();
+  pdf.setFillColor(235,235,235);pdf.path([{op:'m',c:[0,h-25]},{op:'l',c:[25,h]},{op:'l',c:[0,h]},{op:'h',c:[]}]);pdf.fill();
+  pdf.setDrawColor(242,103,34);pdf.setLineWidth(1);pdf.line(w-29,2,w-2,28);pdf.line(2,h-25,25,h-2);pdf.setTextColor(77,77,77);
+ }
+ function pageIf(height=8){if(y+height>pdf.internal.pageSize.getHeight()-22){addReportPage();page++;y=18}}
+ function line(text:string,size=10,bold=false){pdf.setFont('helvetica',bold?'bold':'normal');pdf.setFontSize(size);const parts=pdf.splitTextToSize(text||' ',pdf.internal.pageSize.getWidth()-36) as string[];pageIf(parts.length*size*.48+3);pdf.text(parts,18,y);y+=parts.length*size*.48+3}
+ function heading(text:string){pageIf(18);y+=5;pdf.setDrawColor(77,77,77);pdf.line(18,y,pdf.internal.pageSize.getWidth()-18,y);y+=7;line(text,14,true)}
  function bar(label:string,count:number,total:number,color:[number,number,number]){pageIf(10);pdf.setFontSize(9);pdf.setTextColor(20,45,64);pdf.text(`${label}  ${count}`,18,y);pdf.setFillColor(232,239,242);pdf.rect(92,y-4,100,4,"F");pdf.setFillColor(...color);pdf.rect(92,y-4,total?100*count/total:0,4,"F");y+=9}
  async function addReportImage(kind:"facility-logo"|"company-logo"|"assessor-signature",x:number,top:number,maxW:number,maxH:number,alignRight=false){
   const imageBlob=await uploadsApi.download(project.id,kind);
@@ -61,22 +68,22 @@ export async function createReportPdf(project:Project):Promise<File>{
  heading("Priority and response window");priorities.forEach((p,i)=>bar(`${p.code} ${p.window}`,rows.filter(r=>r.priority?.trim().toUpperCase()===p.code).length,rows.length,colors[Math.min(i+2,4)]));
  heading("Pricing build-up");[["Direct remedial works",direct],[`P&G (${rates.pg}%)`,pg],[`Professional fees (${rates.fees}%)`,fees],[`Contingency (${rates.contingency}%)`,contingency],[`VAT (${rates.vat}%)`,vat],["Indicative total",direct+pg+fees+contingency+vat]].forEach(([label,value])=>line(`${label}: ${money(value as number)}`,10,label==="Indicative total"));
 
- addReportPage();page++;y=18;
+ addReportPage("landscape");page++;y=18;
  heading("Four-year maintenance plan: Opex & Capex");
  line("7% annual compounded escalation. Year 1 is the current-price base. All table amounts in ZAR (R).",9);
  const plan=maintenancePlan(rows,rates);
- const columns=[36,22,22,22,22,25,25];
+ const columns=[51,35,35,35,35,35,35];
  function planTableRow(cells:string[],header=false,strong=false,toneLabel=cells[0]){
   pdf.setFont('helvetica',header||strong?'bold':'normal');
-  const wrapped=cells.map((cell,i)=>{pdf.setFontSize(7.3);return pdf.splitTextToSize(cell,columns[i]-4) as string[]});
+  const wrapped=cells.map((cell,i)=>{pdf.setFontSize(9);return pdf.splitTextToSize(cell,columns[i]-4) as string[]});
   const height=Math.max(...wrapped.map(lines=>lines.length))*4+5;
   pageIf(height);
   const tone=maintenanceRowTheme(toneLabel,strong);
-  pdf.setFillColor(...(header?[61,65,69]:tone.fill) as [number,number,number]);pdf.rect(18,y,174,height,'F');
+  pdf.setFillColor(...(header?[61,65,69]:tone.fill) as [number,number,number]);pdf.rect(18,y,pdf.internal.pageSize.getWidth()-36,height,'F');
   if(!header){pdf.setFillColor(...tone.accent);pdf.rect(18,y,1,height,'F')}
-  pdf.setTextColor(...(header?[255,255,255]:tone.ink) as [number,number,number]);pdf.setFont('helvetica',header||strong?'bold':'normal');pdf.setFontSize(7.3);
+  pdf.setTextColor(...(header?[255,255,255]:tone.ink) as [number,number,number]);pdf.setFont('helvetica',header||strong?'bold':'normal');pdf.setFontSize(9);
   let x=18;wrapped.forEach((lines,i)=>{pdf.text(lines,i===0?x+2:x+columns[i]-2,y+5,{align:i===0?'left':'right'});x+=columns[i]});
-  pdf.setDrawColor(220,220,220);pdf.setLineWidth(.2);pdf.line(18,y+height,192,y+height);y+=height;pdf.setTextColor(77,77,77);
+  pdf.setDrawColor(220,220,220);pdf.setLineWidth(.2);pdf.line(18,y+height,pdf.internal.pageSize.getWidth()-18,y+height);y+=height;pdf.setTextColor(77,77,77);
  }
  planTableRow(['Budget category','Year 1 / Base','Year 2 / +7%','Year 3 / +14.49%','Year 4 / +22.50%','4-year total','Unscheduled / Base'],true);
  const planMoney=(n:number)=>new Intl.NumberFormat('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
@@ -109,12 +116,12 @@ export async function createReportPdf(project:Project):Promise<File>{
   planTableRow([category.label,...category.years.map(planMoney),planMoney(category.total),planMoney(category.unscheduled)],false,true,category.label);
  }
  line('Unpriced items are shown but excluded from amounts. Cent rounding is balanced across components to match each category total. Project allowances and VAT are added only in the maintenance summary.',8);
- addReportPage();page++;y=18;
+ addReportPage("portrait");page++;y=18;
  heading("Direct works by block / allocation");[...new Set(priced.map(r=>allocation(code.get(r.area))))].forEach(block=>line(`${block}: ${money(priced.filter(r=>allocation(code.get(r.area))===block).reduce((s,r)=>s+(itemAmount(r)||0),0))}`,10));
  heading("Captured items and bill of quantities");rows.forEach((r,i)=>{pageIf(27);line(`${i+1}. ${allocation(code.get(r.area))} / ${r.area} / ${r.element} / ${r.component}`,10,true);line(`${r.type||"Component type not set"}  |  ${r.discipline||project.discipline||"Profession not set"}`,9);line(`${r.measuredScope||r.comment||r.component}  |  Qty ${r.remedialQuantity??"—"} ${r.extentUnit||""}  |  Rate ${r.unitRate==null?"—":money(r.unitRate)}  |  Amount ${itemAmount(r)==null?"For QS review":money(itemAmount(r)!)}`,9);line(`${r.priority||"No priority"}  |  ${r.workType||"Type not set"}${r.workType!=="Compliance"&&r.maintenanceWork?` / ${r.maintenanceWork}`:""}  |  ${valid(r)?`C${r.ratings.indexOf(Math.max(...r.ratings))+1}`:"Unrated"}  |  ${r.photos?.length||0} photo(s)`,9);y+=2});
  heading("Assessor sign-off");if(project.assessorSignatureName){pageIf(31);await addReportImage("assessor-signature",18,y,65,24);y+=29}line(`Assessor: ${project.assessorName||"Not entered"}`,10);if(project.assessorRole)line(`Professional role: ${project.assessorRole}`,9);if(project.assessorRegistration)line(`Registration: ${project.assessorRegistration}`,9);
  heading("Pricing disclaimer");line("Costs are indicative assessment estimates, not a final quotation or measured bill of quantities. Confirm scope, quantities, specifications, site access, contractor rates, fees, contingency and VAT before procurement. Blank cost fields are excluded. A zero total does not mean no remedial work is required.",9);
- const pages=pdf.getNumberOfPages();for(let i=1;i<=pages;i++){pdf.setPage(i);pdf.setFontSize(8);pdf.setTextColor(...(i===1?[167,201,206]:[100,117,130]) as [number,number,number]);pdf.text(`Facility Condition Assessment  |  ${project.name}  |  Page ${i} of ${pages}`,18,289)}
+ const pages=pdf.getNumberOfPages();for(let i=1;i<=pages;i++){pdf.setPage(i);pdf.setFontSize(8);pdf.setTextColor(...(i===1?[167,201,206]:[100,117,130]) as [number,number,number]);pdf.text(`Facility Condition Assessment  |  ${project.name}  |  Page ${i} of ${pages}`,18,pdf.internal.pageSize.getHeight()-8)}
  const filename=`FCA-${project.name.replace(/[^a-z0-9-]+/gi,"-").replace(/^-|-$/g,"")||"Report"}.pdf`;
  return new File([pdf.output("blob")],filename,{type:"application/pdf"});
 }
