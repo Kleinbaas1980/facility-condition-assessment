@@ -11,6 +11,10 @@ export const disciplines = [
   "Civil Engineer",
 ] as const;
 
+export const costBuildUpSchema=z.object({
+ resources:z.array(z.object({id:text(160).min(1),category:z.enum(['Material','Labour','Plant','Subcontractor','Other']),description:text(600),unit:text(40),quantity:numeric,rate:numeric,wastePercent:z.number().finite().min(0).max(100)}).strict()).max(100),
+ overheadPercent:z.number().finite().min(0).max(100),profitPercent:z.number().finite().min(0).max(100),reference:text(2000),notes:text(8000)
+}).strict();
 const area = z
   .object({
     id: z.string().uuid().optional(),
@@ -23,6 +27,8 @@ const area = z
   .strict();
 export const capture = z
   .object({
+    costTemplateId:text(1000).nullable().optional(),
+    costBuildUp:costBuildUpSchema.nullable().optional(),
     id: z.string().uuid().optional(),
     area: text(240).min(1),
     section: text(),
@@ -31,7 +37,7 @@ export const capture = z
     type: text(),
     exists: z.enum(["", "Yes", "No", "Required"]),
     extent: numeric,
-    extentUnit: z.enum(["", "m", "No.", "LM", "m²"]).optional(),
+    extentUnit: text(40).optional(),
     remedialCost: numeric.optional(),
     remedialQuantity: numeric.optional(),
     unitRate: numeric.optional(),

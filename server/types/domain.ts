@@ -1,3 +1,4 @@
+import type {CostBuildUp} from "../src/costing/qs-cost-model.js";
 export type User = {
   profession?: string;
   role: "admin" | "assessor";
@@ -18,6 +19,8 @@ export type Area = {
 };
 
 export type Capture = {
+  costTemplateId?:string|null;
+  costBuildUp?:CostBuildUp|null;
   id?: string;
   area: string;
   section: string;

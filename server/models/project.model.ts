@@ -76,7 +76,7 @@ export async function read(
   ).rows;
   const captures = (
     await db.query(
-      'SELECT c.id,a.name AS area,c.section,e.name AS element,c.component,c.component_type AS type,c.present AS exists,c.extent,c.extent_unit AS "extentUnit",c.remedial_quantity AS "remedialQuantity",c.unit_rate AS "unitRate",c.remedial_cost AS "remedialCost",c.priority,c.measured_scope AS "measuredScope",c.work_type AS "workType",c.maintenance_work AS "maintenanceWork",c.ratings,c.comment,c.discipline FROM captures c JOIN elements e ON e.id=c.element_id JOIN functional_areas a ON a.id=e.area_id WHERE c.project_id=$1 ORDER BY c.position',
+      'SELECT c.id,a.name AS area,c.section,e.name AS element,c.component,c.component_type AS type,c.present AS exists,c.extent,c.extent_unit AS "extentUnit",c.remedial_quantity AS "remedialQuantity",c.unit_rate AS "unitRate",c.cost_template_id AS "costTemplateId",c.cost_build_up AS "costBuildUp",c.remedial_cost AS "remedialCost",c.priority,c.measured_scope AS "measuredScope",c.work_type AS "workType",c.maintenance_work AS "maintenanceWork",c.ratings,c.comment,c.discipline FROM captures c JOIN elements e ON e.id=c.element_id JOIN functional_areas a ON a.id=e.area_id WHERE c.project_id=$1 ORDER BY c.position',
       [id],
     )
   ).rows as Capture[];
@@ -301,6 +301,8 @@ export async function writePayload(
       extent_unit: capture.extentUnit || "",
       remedial_quantity: capture.remedialQuantity ?? null,
       unit_rate: capture.unitRate ?? null,
+      cost_template_id:capture.costTemplateId??null,
+      cost_build_up:capture.costBuildUp??null,
       remedial_cost: capture.remedialCost ?? null,
       priority: capture.priority || "",
       measured_scope: capture.measuredScope || "",
@@ -316,7 +318,7 @@ export async function writePayload(
   await bulk(
     db,
     "captures",
-    "id uuid,project_id uuid,element_id uuid,section text,component text,component_type text,present text,extent numeric,extent_unit text,remedial_quantity numeric,unit_rate numeric,remedial_cost numeric,priority text,measured_scope text,work_type text,maintenance_work text,ratings double precision[],comment text,discipline text,position integer",
+    "id uuid,project_id uuid,element_id uuid,section text,component text,component_type text,present text,extent numeric,extent_unit text,remedial_quantity numeric,unit_rate numeric,cost_template_id text,cost_build_up jsonb,remedial_cost numeric,priority text,measured_scope text,work_type text,maintenance_work text,ratings double precision[],comment text,discipline text,position integer",
     [
       "element_id",
       "section",
@@ -327,6 +329,8 @@ export async function writePayload(
       "extent_unit",
       "remedial_quantity",
       "unit_rate",
+      "cost_template_id",
+      "cost_build_up",
       "remedial_cost",
       "priority",
       "measured_scope",

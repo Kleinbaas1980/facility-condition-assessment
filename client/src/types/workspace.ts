@@ -1,5 +1,8 @@
+import type {CostBuildUp} from "@/lib/qs-cost-model";
 export type Photo = { id: string; name: string; type: string };
 export type Capture = {
+  costTemplateId?:string|null;
+  costBuildUp?:CostBuildUp|null;
   id?: string;
   photos?: Photo[];
   area: string;

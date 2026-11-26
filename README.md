@@ -4,7 +4,28 @@ This is the **original blue Facility Condition Assessment application**, exporte
 
 The client is Next.js App Router with React, Tailwind and Shadcn components. The server is Node.js/Express 5. Neon-compatible PostgreSQL stores records, sessions, ratings, quantities and prices. Private Vercel Blob or Azure Blob Storage stores uploaded files. Axios is the only client API transport.
 
-There are **no seeded users, projects, assessment findings, measurements, ratings or prices**, no mock API routes and no SQLite/Cloudflare database dependencies. `client/src/lib/catalog.ts` contains reusable blank checklist definitions, not client assessment records. A standard template creates blank rows only when an authenticated assessor creates a project. No Baobab facility names or assessed data are bundled.
+There are **no seeded users, projects, assessment findings, measurements or ratings**, no mock API routes and no SQLite/Cloudflare database dependencies. `client/src/lib/catalog.ts` contains reusable blank checklist definitions, not client assessment records. A standard template creates blank rows only when an authenticated assessor creates a project. No Baobab facility names or assessed data are bundled.
+
+
+## Costing update (26 November 2026)
+
+The latest 1Crew costing workflow is adapted to this repository’s Next.js/Express/PostgreSQL stack; the existing branding, authentication and project autosave remain in place.
+
+- Open a project → **QS pricing → Platform rate library** in the admin workspace. Maintain one editable resource library for all projects and add components for any of the seven professions.
+- Each standard component has Repair, Replacement, Routine maintenance, Preventative maintenance and Refurbishment variants. Materials, labour, plant, subcontractors, wastage, overheads and profit markup remain editable. Existing published-app budget assumptions are included in `qs-budget-rates.ts` and explicitly labelled **Indicative 1C budget allowance · QS review required**. These are not verified supplier quotations or a Candy integration. Custom components start as unpriced drafts.
+- Assessors choose a component work rate and supply the measured quantity/unit. Rates and manual costs are read-only in the assessor workspace. The Express sync endpoint independently resolves library rates and does not trust submitted monetary values or resource snapshots.
+- Applied rates retain a resource snapshot on the finding. Later library edits do not silently reprice existing findings. Changing the measurement unit clears an incompatible rate; selecting a rate with a different unit clears the old quantity for remeasurement. **Price measured items** fills eligible unpriced BOQ items.
+- Existing project allowances (P&G, professional fees, contingency and VAT), BOQ/report totals and conflict-aware autosave continue to operate. Avoid duplicating project allowances inside resource rates.
+
+Before running this update against an existing database, back it up and apply the additive migration:
+
+```sh
+npm run db:migrate
+```
+
+`server/sql/migrations/008_platform_costing.sql` creates `platform_rates` and adds `captures.cost_template_id` / `captures.cost_build_up`. There are no new environment keys. Use the migration runner for existing and new installations; do not re-run an old bootstrap SQL script over a live database. The rate API is `GET /api/rate-library` (authenticated) and `POST /api/rate-library` (admin only, existing JWT-cookie and CSRF protections).
+
+Validation: `npm test`, `npm run typecheck`, and `npm run build`. Database integration tests require a configured disposable PostgreSQL database and `RUN_DATABASE_TESTS=true`.
 
 ## Project layout
 
@@ -25,7 +46,7 @@ There are **no seeded users, projects, assessment findings, measurements, rating
 | `server/middleware/` | JWT/session auth, crypto-based CSRF, validation, persistent rate limits, uploads, errors |
 | `server/types/` | Domain and authenticated Express request types |
 | `server/sql/migrations/001_initial.sql` | All application tables, constraints and indexes |
-| `server/sql/schema.sql` | Complete SQL-editor bootstrap including migration bookkeeping |
+| `server/sql/schema.sql` | Legacy SQL-editor bootstrap; use the migration runner to apply subsequent migrations |
 | `server/tests/` | Unit tests and an opt-in integration suite using a real PostgreSQL test database |
 | `.env.example` | Reference containing all client/server environment keys |
 

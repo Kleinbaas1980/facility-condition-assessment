@@ -1,5 +1,8 @@
+import {sameBuildUp} from "./qs-cost-model";
 type Rec = Record<string, any>;
 export const CAPTURE_FIELDS = [
+  "costBuildUp",
+  "costTemplateId",
   "section",
   "element",
   "component",
@@ -44,6 +47,7 @@ const num = (f: string, v: unknown) =>
 
 // MUST behave exactly like same() in the server sync.model.ts
 export function same(field: string, a: unknown, b: unknown) {
+  if(field==="costBuildUp")return sameBuildUp(a,b);
   if (field === "ratings") {
     const x = a as unknown[],
       y = b as unknown[];
@@ -65,7 +69,7 @@ export const pick = (o: Rec, fields: readonly string[]) =>
   Object.fromEntries(fields.map((f) => [f, o[f]]));
 
 const orEmpty = (f: string, v: unknown) =>
-  v === undefined ? (NUMERIC.has(f) ? null : "") : v;
+  v === undefined ? (NUMERIC.has(f)||f==="costBuildUp"||f==="costTemplateId" ? null : "") : v;
 
 export function diffFields(fields: readonly string[], row: Rec, base: Rec) {
   const out: Record<string, { base: unknown; value: unknown }> = {};
