@@ -1,4 +1,5 @@
 "use client";
+import MaintenancePlanTable from "./maintenance-plan-table";
 import { reportsApi } from "@/api/reports";
 import { useRef, useState } from "react";
 import { allocation, itemAmount } from "@/lib/costing";
@@ -682,6 +683,7 @@ export default function SummaryReport({
             save.
           </p>
         </section>
+        <MaintenancePlanTable items={captures} pricing={settings} />
         <section className="card report-section">
           <h2>Direct works by functional area</h2>
           <div className="table-scroll">

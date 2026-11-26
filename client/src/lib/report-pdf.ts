@@ -1,3 +1,4 @@
+import {maintenancePlan,planNotes} from './maintenance-plan';
 import axios from "axios";
 import { uploadsApi } from "@/api/uploads";
 import type { jsPDF as PdfType } from "jspdf";
@@ -58,6 +59,26 @@ export async function createReportPdf(project:Project):Promise<File>{
  heading("Condition rating of captured items");const colors:[[number,number,number],...Array<[number,number,number]>]=[[25,134,107],[131,174,67],[228,170,44],[223,119,46],[201,74,71]];["Very good","Good","Fair","Poor","Very poor"].forEach((label,i)=>bar(label,rated.filter(r=>r.ratings.indexOf(Math.max(...r.ratings))===i).length,rated.length,colors[i]));
  heading("Priority and response window");priorities.forEach((p,i)=>bar(`${p.code} ${p.window}`,rows.filter(r=>r.priority?.trim().toUpperCase()===p.code).length,rows.length,colors[Math.min(i+2,4)]));
  heading("Pricing build-up");[["Direct remedial works",direct],[`P&G (${rates.pg}%)`,pg],[`Professional fees (${rates.fees}%)`,fees],[`Contingency (${rates.contingency}%)`,contingency],[`VAT (${rates.vat}%)`,vat],["Indicative total",direct+pg+fees+contingency+vat]].forEach(([label,value])=>line(`${label}: ${money(value as number)}`,10,label==="Indicative total"));
+
+ addReportPage();page++;y=18;
+ heading("Three-year maintenance plan: Opex & Capex");
+ line("7% annual compounded escalation. Year 1 is the current-price base.",9);
+ const plan=maintenancePlan(rows,rates);
+ const columns=[42,25,25,25,28,29];
+ function planTableRow(cells:string[],header=false,strong=false){
+  const wrapped=cells.map((cell,i)=>{pdf.setFontSize(8);return pdf.splitTextToSize(cell,columns[i]-4) as string[]});
+  const height=Math.max(...wrapped.map(lines=>lines.length))*4+5;
+  pageIf(height);
+  pdf.setFillColor(...(header?[77,77,77]:strong?[255,237,224]:[255,255,255]) as [number,number,number]);pdf.rect(18,y,174,height,'F');
+  pdf.setTextColor(...(header?[255,255,255]:[55,55,55]) as [number,number,number]);pdf.setFont('helvetica',header||strong?'bold':'normal');pdf.setFontSize(8);
+  let x=18;wrapped.forEach((lines,i)=>{pdf.text(lines,i===0?x+2:x+columns[i]-2,y+5,{align:i===0?'left':'right'});x+=columns[i]});
+  pdf.setDrawColor(220,220,220);pdf.setLineWidth(.2);pdf.line(18,y+height,192,y+height);y+=height;pdf.setTextColor(77,77,77);
+ }
+ planTableRow(['Budget category','Year 1 / Base','Year 2 / +7%','Year 3 / +14.49%','3-year total','Unscheduled / Base'],true);
+ plan.rows.forEach(row=>planTableRow([row.label,...row.years.map(money),money(row.total),money(row.unscheduled)],false,!!row.strong));
+ y+=5;line(`${plan.unpriced} unpriced item(s) excluded; ${plan.reviewItems} need classification; ${plan.unscheduledItems} need a priority/year. Unscheduled amounts are outside the three-year total.`,9);
+ planNotes.forEach(note=>line(note,8));
+ line('Opex/Capex rows exclude allowances and VAT. Allowances are added to direct works; VAT applies after allowances.',8);
  heading("Direct works by block / allocation");[...new Set(priced.map(r=>allocation(code.get(r.area))))].forEach(block=>line(`${block}: ${money(priced.filter(r=>allocation(code.get(r.area))===block).reduce((s,r)=>s+(itemAmount(r)||0),0))}`,10));
  heading("Captured items and bill of quantities");rows.forEach((r,i)=>{pageIf(27);line(`${i+1}. ${allocation(code.get(r.area))} / ${r.area} / ${r.element} / ${r.component}`,10,true);line(`${r.type||"Component type not set"}  |  ${r.discipline||project.discipline||"Profession not set"}`,9);line(`${r.measuredScope||r.comment||r.component}  |  Qty ${r.remedialQuantity??"—"} ${r.extentUnit||""}  |  Rate ${r.unitRate==null?"—":money(r.unitRate)}  |  Amount ${itemAmount(r)==null?"For QS review":money(itemAmount(r)!)}`,9);line(`${r.priority||"No priority"}  |  ${r.workType||"Type not set"}${r.workType!=="Compliance"&&r.maintenanceWork?` / ${r.maintenanceWork}`:""}  |  ${valid(r)?`C${r.ratings.indexOf(Math.max(...r.ratings))+1}`:"Unrated"}  |  ${r.photos?.length||0} photo(s)`,9);y+=2});
  heading("Assessor sign-off");if(project.assessorSignatureName){pageIf(31);await addReportImage("assessor-signature",18,y,65,24);y+=29}line(`Assessor: ${project.assessorName||"Not entered"}`,10);if(project.assessorRole)line(`Professional role: ${project.assessorRole}`,9);if(project.assessorRegistration)line(`Registration: ${project.assessorRegistration}`,9);

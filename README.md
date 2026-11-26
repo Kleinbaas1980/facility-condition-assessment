@@ -296,3 +296,9 @@ An assessor assignment authorizes an email/profession; it does not set or reveal
 ### SQL files
 
 For a new Neon database, run `npm run db:migrate` or execute `server/sql/schema.sql` once. Both create the complete schema, including administrator roles, deletion requests, report addresses and assessor assignments. Do not run both bootstrap methods on the same new database. All application SELECT/INSERT/UPDATE/DELETE queries are in `server/models/` and `server/controllers/`; variable values use PostgreSQL parameters.
+
+## Three-year maintenance plan
+
+The on-screen summary and downloaded PDF contain the same Opex/Capex table. Year 1 uses current prices, Year 2 uses ×1.07 and Year 3 uses ×1.1449. P1/P2 are allocated to Year 1, P3 to Year 2 and P4 provisionally to Year 3 (its 24–60 month window requires programme review). Missing priorities are shown separately as unscheduled current-price amounts, outside the three-year total.
+
+Repair and routine/preventative maintenance are provisionally Opex; replacement and Upgrade work are Capex. Refurbishment, compliance-only and unclear scope remain in a visible classification-review row. Each captured item is scheduled once; recurrence is not inferred. Unpriced items are counted but excluded from values. Project allowances and VAT are added once after escalation. The plan uses all captured BOQ items regardless of dashboard filters. Confirm the schedule and classifications with the QS/client before adopting a budget. No database migration or environment change is required for this report addition.
