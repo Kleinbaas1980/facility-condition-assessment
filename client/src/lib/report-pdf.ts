@@ -63,7 +63,7 @@ export async function createReportPdf(project:Project):Promise<File>{
 
  addReportPage();page++;y=18;
  heading("Four-year maintenance plan: Opex & Capex");
- line("7% annual compounded escalation. Year 1 is the current-price base.",9);
+ line("7% annual compounded escalation. Year 1 is the current-price base. All table amounts in ZAR (R).",9);
  const plan=maintenancePlan(rows,rates);
  const columns=[36,22,22,22,22,25,25];
  function planTableRow(cells:string[],header=false,strong=false){
@@ -79,7 +79,8 @@ export async function createReportPdf(project:Project):Promise<File>{
   pdf.setDrawColor(220,220,220);pdf.setLineWidth(.2);pdf.line(18,y+height,192,y+height);y+=height;pdf.setTextColor(77,77,77);
  }
  planTableRow(['Budget category','Year 1 / Base','Year 2 / +7%','Year 3 / +14.49%','Year 4 / +22.50%','4-year total','Unscheduled / Base'],true);
- plan.rows.forEach(row=>planTableRow([row.label,...row.years.map(money),money(row.total),money(row.unscheduled)],false,!!row.strong));
+ const planMoney=(n:number)=>new Intl.NumberFormat('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+ plan.rows.forEach(row=>planTableRow([row.label,...row.years.map(planMoney),planMoney(row.total),planMoney(row.unscheduled)],false,!!row.strong));
  y+=5;line(`${plan.unpriced} unpriced item(s) excluded; ${plan.reviewItems} need classification; ${plan.unscheduledItems} need a priority/year. Unscheduled amounts are outside the four-year total.`,9);
  planNotes.forEach(note=>line(note,8));
  line('Opex/Capex rows exclude allowances and VAT. Allowances are added to direct works; VAT applies after allowances.',8);
