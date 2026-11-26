@@ -66,6 +66,7 @@ export async function createReportPdf(project:Project):Promise<File>{
  const plan=maintenancePlan(rows,rates);
  const columns=[42,25,25,25,28,29];
  function planTableRow(cells:string[],header=false,strong=false){
+  pdf.setFont('helvetica',header||strong?'bold':'normal');
   const wrapped=cells.map((cell,i)=>{pdf.setFontSize(8);return pdf.splitTextToSize(cell,columns[i]-4) as string[]});
   const height=Math.max(...wrapped.map(lines=>lines.length))*4+5;
   pageIf(height);
