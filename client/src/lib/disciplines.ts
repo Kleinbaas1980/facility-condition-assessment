@@ -1,4 +1,4 @@
-export const disciplines=[
+export const disciplines = [
   "Architect",
   "Plumber",
   "Electrician",

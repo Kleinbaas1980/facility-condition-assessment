@@ -1,4 +1,8 @@
-import {matchingTemplates,templatePatch,type RateTemplate} from '@/lib/qs-rate-library';
+import {
+  matchingTemplates,
+  templatePatch,
+  type RateTemplate,
+} from "@/lib/qs-rate-library";
 import { Dispatch, SetStateAction } from "react";
 import { catalog as bca } from "@/lib/catalog";
 import {
@@ -17,7 +21,7 @@ import { itemAmount } from "@/lib/costing";
 import { request } from "@/api/http";
 
 interface WorkspaceProps {
-  platformRates:RateTemplate[];
+  platformRates: RateTemplate[];
   assignedProfession: string;
   setAddingArea: Dispatch<SetStateAction<boolean>>;
   addingArea: boolean;
@@ -68,7 +72,7 @@ interface WorkspaceProps {
   customComponent: string;
   setCustomComponent: Dispatch<SetStateAction<string>>;
   current: {
-    costTemplateId?:string|null;
+    costTemplateId?: string | null;
     id?: string;
     photos?: Photo[];
     area: string;
@@ -753,7 +757,10 @@ export default function WorkspaceSection({
                         <option value="m">Metre (m)</option>
                         <option value="No.">Number (No.)</option>
                         <option value="LM">Linear metre (LM)</option>
-                        <option value="m²">Square metre (m²)</option><option value="m³">Cubic metre (m³)</option><option value="kg">Kilogram (kg)</option><option value="sum">Lump sum</option>
+                        <option value="m²">Square metre (m²)</option>
+                        <option value="m³">Cubic metre (m³)</option>
+                        <option value="kg">Kilogram (kg)</option>
+                        <option value="sum">Lump sum</option>
                       </select>
                     </label>
                     <label>
@@ -777,7 +784,14 @@ export default function WorkspaceSection({
                     </label>
                     <label>
                       Rate (R per unit)
-                      <input readOnly={!isAdmin} aria-readonly={!isAdmin} title={!isAdmin?"Rate is controlled by the QS platform library":undefined}
+                      <input
+                        readOnly={!isAdmin}
+                        aria-readonly={!isAdmin}
+                        title={
+                          !isAdmin
+                            ? "Rate is controlled by the QS platform library"
+                            : undefined
+                        }
                         type="number"
                         min="0"
                         step="0.01"
@@ -809,7 +823,8 @@ export default function WorkspaceSection({
                             : (row.remedialCost ?? "")
                         }
                         disabled={
-                          !isAdmin || (row.unitRate != null && row.remedialQuantity != null)
+                          !isAdmin ||
+                          (row.unitRate != null && row.remedialQuantity != null)
                         }
                         onChange={(e) =>
                           update(row.index, {
@@ -823,7 +838,31 @@ export default function WorkspaceSection({
                       />
                     </label>
                   </div>
-                  <label>Built-in component rate<select value={row.costTemplateId||""} onChange={e=>{const rate=matchingTemplates(row,platformRates).find(t=>t.id===e.target.value);if(rate)update(row.index,templatePatch(rate,row));}}><option value="">Choose work breakdown, then enter quantity</option>{matchingTemplates(row,platformRates).map(t=><option key={t.id} value={t.id}>{t.work} · {t.build.reference.startsWith('Indicative 1C')?'Indicative · ':''}{t.unit}</option>)}</select></label>
+                  <label>
+                    Built-in component rate
+                    <select
+                      value={row.costTemplateId || ""}
+                      onChange={(e) => {
+                        const rate = matchingTemplates(row, platformRates).find(
+                          (t) => t.id === e.target.value,
+                        );
+                        if (rate) update(row.index, templatePatch(rate, row));
+                      }}
+                    >
+                      <option value="">
+                        Choose work breakdown, then enter quantity
+                      </option>
+                      {matchingTemplates(row, platformRates).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.work} ·{" "}
+                          {t.build.reference.startsWith("Indicative 1C")
+                            ? "Indicative · "
+                            : ""}
+                          {t.unit}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="details">
                     <label>
                       Priority

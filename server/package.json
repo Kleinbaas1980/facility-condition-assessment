@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch --import tsx src/index.ts",
+    "dev": "NODE_OPTIONS=--network-family-autoselection-attempt-timeout=3000 node --watch --import tsx src/index.ts",
     "build": "tsc -p tsconfig.json && node src/scripts/copy-assets.mjs",
     "start": "node dist/src/index.js",
     "typecheck": "tsc --noEmit",
