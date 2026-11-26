@@ -62,25 +62,25 @@ export async function createReportPdf(project:Project):Promise<File>{
  heading("Pricing build-up");[["Direct remedial works",direct],[`P&G (${rates.pg}%)`,pg],[`Professional fees (${rates.fees}%)`,fees],[`Contingency (${rates.contingency}%)`,contingency],[`VAT (${rates.vat}%)`,vat],["Indicative total",direct+pg+fees+contingency+vat]].forEach(([label,value])=>line(`${label}: ${money(value as number)}`,10,label==="Indicative total"));
 
  addReportPage();page++;y=18;
- heading("Three-year maintenance plan: Opex & Capex");
+ heading("Four-year maintenance plan: Opex & Capex");
  line("7% annual compounded escalation. Year 1 is the current-price base.",9);
  const plan=maintenancePlan(rows,rates);
- const columns=[42,25,25,25,28,29];
+ const columns=[36,22,22,22,22,25,25];
  function planTableRow(cells:string[],header=false,strong=false){
   pdf.setFont('helvetica',header||strong?'bold':'normal');
-  const wrapped=cells.map((cell,i)=>{pdf.setFontSize(8);return pdf.splitTextToSize(cell,columns[i]-4) as string[]});
+  const wrapped=cells.map((cell,i)=>{pdf.setFontSize(7.3);return pdf.splitTextToSize(cell,columns[i]-4) as string[]});
   const height=Math.max(...wrapped.map(lines=>lines.length))*4+5;
   pageIf(height);
   const tone=maintenanceRowTheme(cells[0],strong);
   pdf.setFillColor(...(header?[61,65,69]:tone.fill) as [number,number,number]);pdf.rect(18,y,174,height,'F');
   if(!header){pdf.setFillColor(...tone.accent);pdf.rect(18,y,1,height,'F')}
-  pdf.setTextColor(...(header?[255,255,255]:tone.ink) as [number,number,number]);pdf.setFont('helvetica',header||strong?'bold':'normal');pdf.setFontSize(8);
+  pdf.setTextColor(...(header?[255,255,255]:tone.ink) as [number,number,number]);pdf.setFont('helvetica',header||strong?'bold':'normal');pdf.setFontSize(7.3);
   let x=18;wrapped.forEach((lines,i)=>{pdf.text(lines,i===0?x+2:x+columns[i]-2,y+5,{align:i===0?'left':'right'});x+=columns[i]});
   pdf.setDrawColor(220,220,220);pdf.setLineWidth(.2);pdf.line(18,y+height,192,y+height);y+=height;pdf.setTextColor(77,77,77);
  }
- planTableRow(['Budget category','Year 1 / Base','Year 2 / +7%','Year 3 / +14.49%','3-year total','Unscheduled / Base'],true);
+ planTableRow(['Budget category','Year 1 / Base','Year 2 / +7%','Year 3 / +14.49%','Year 4 / +22.50%','4-year total','Unscheduled / Base'],true);
  plan.rows.forEach(row=>planTableRow([row.label,...row.years.map(money),money(row.total),money(row.unscheduled)],false,!!row.strong));
- y+=5;line(`${plan.unpriced} unpriced item(s) excluded; ${plan.reviewItems} need classification; ${plan.unscheduledItems} need a priority/year. Unscheduled amounts are outside the three-year total.`,9);
+ y+=5;line(`${plan.unpriced} unpriced item(s) excluded; ${plan.reviewItems} need classification; ${plan.unscheduledItems} need a priority/year. Unscheduled amounts are outside the four-year total.`,9);
  planNotes.forEach(note=>line(note,8));
  line('Opex/Capex rows exclude allowances and VAT. Allowances are added to direct works; VAT applies after allowances.',8);
  heading("Direct works by block / allocation");[...new Set(priced.map(r=>allocation(code.get(r.area))))].forEach(block=>line(`${block}: ${money(priced.filter(r=>allocation(code.get(r.area))===block).reduce((s,r)=>s+(itemAmount(r)||0),0))}`,10));

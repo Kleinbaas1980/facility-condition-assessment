@@ -4,8 +4,8 @@ import {maintenancePlan,budgetCategory,escalationFactors} from '../src/lib/maint
 const row=(maintenanceWork:string,priority:string,remedialCost:number|null)=>({maintenanceWork,priority,remedialCost});
 test('7 percent compounds annually with current prices in year one',()=>{
  const p=maintenancePlan([row('Repair','P1',100),row('Repair','P3',100),row('Repair','P4',100)]);
- assert.deepEqual(p.rows[0].years,[100,107,114.49]);assert.equal(p.rows[0].total,321.49);
- assert.equal(escalationFactors[2],1.1449);
+ assert.deepEqual(p.rows[0].years,[100,107,57.25,61.25]);assert.equal(p.rows[0].total,325.5);
+ assert.equal(escalationFactors[2],1.1449);assert.equal(Number(escalationFactors[3].toFixed(6)),1.225043);
 });
 test('Opex and Capex follow captured scope, ambiguity remains visible',()=>{
  assert.equal(budgetCategory(row('Routine maintenance','P1',10)),'Opex');
@@ -27,5 +27,11 @@ test('project allowances and VAT are added once after escalation',()=>{
 });
 test('each item occurs once and quantity times rate takes precedence',()=>{
  const p=maintenancePlan([{...row('Routine maintenance','P1',999),remedialQuantity:2,unitRate:50}]);
- assert.deepEqual(p.rows[0].years,[100,0,0]);assert.equal(p.rows[0].total,100);
+ assert.deepEqual(p.rows[0].years,[100,0,0,0]);assert.equal(p.rows[0].total,100);
+});
+
+test('P4 phasing occurs once across years three and four, with no lost cents',()=>{
+ const p=maintenancePlan([row('Replacement','P4',1000),row('Replacement','',75)]);
+ assert.deepEqual(p.rows[1].years,[0,0,572.45,612.52]);assert.equal(p.rows[1].total,1184.97);assert.equal(p.rows[1].unscheduled,75);
+ const tiny=maintenancePlan([row('Repair','P4',0.01)]);assert.equal(tiny.rows[0].total,0.01);
 });
